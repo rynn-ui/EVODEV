@@ -14,7 +14,10 @@ htmlcov/
 
 # AI Agent & local workspace files
 .agents/
-.archify/
+.archify/*
+!.archify/architecture-evodev-system-20261023-192800/
+.archify/architecture-evodev-system-20261023-192800/*
+!.archify/architecture-evodev-system-20261023-192800/evodev-system.html
 agent.md
 memory.md
 skills-lock.json
