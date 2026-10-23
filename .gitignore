@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.evodev/
+*.db
+*.db-shm
+*.db-wal
+.coverage
+htmlcov/
+
+# AI Agent & local workspace files
+.agents/
+.archify/
+agent.md
+memory.md
+skills-lock.json
+*.mod

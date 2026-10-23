@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EvoDev Experience Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="layout">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo-mark">⚡</div>
+        <div class="brand-text">
+          <span class="brand-name">EvoDev</span>
+          <span class="brand-sub">Experience Layer</span>
+        </div>
+      </div>
+
+      <div class="active-profile-card">
+        <span class="label">ACTIVE PROFILE</span>
+        <div class="profile-name-row">
+          <span id="active-profile-name" class="profile-title">Loading...</span>
+          <span id="active-profile-ver" class="badge">v1.0.0</span>
+        </div>
+        <select id="profile-select" class="profile-dropdown" aria-label="Switch Profile">
+          <option value="">Switch profile...</option>
+        </select>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-item active" data-tab="overview">
+          <span class="nav-icon">📊</span> Overview & Telemetry
+        </button>
+        <button class="nav-item" data-tab="inspector">
+          <span class="nav-icon">🔍</span> Experience Inspector
+        </button>
+        <button class="nav-item" data-tab="lessons">
+          <span class="nav-icon">💡</span> Verified Lessons
+        </button>
+
+        <button class="nav-item" data-tab="strategies">
+          <span class="nav-icon">🎯</span> Strategy Statistics
+        </button>
+        <button class="nav-item" data-tab="experiences">
+          <span class="nav-icon">📝</span> Experience Log
+        </button>
+        <button class="nav-item" data-tab="benchmarks">
+          <span class="nav-icon">⏱️</span> Empirical Benchmarks
+        </button>
+        <button class="nav-item" data-tab="integrations">
+          <span class="nav-icon">🔌</span> Agent Connectors
+        </button>
+        <button class="nav-item" data-tab="doctor">
+          <span class="nav-icon">🩺</span> Diagnostics & Doctor
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <span class="system-tag">Local Engine · SQLite WAL</span>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Top Header -->
+      <header class="topbar">
+        <div class="page-title-box">
+          <h1 id="page-heading">System Overview</h1>
+          <p id="page-subheading">Runtime health, storage consumption, and active experience footprint.</p>
+        </div>
+        <div class="topbar-actions">
+          <button id="btn-refresh" class="btn btn-secondary">🔄 Refresh</button>
+          <button id="btn-create-profile" class="btn btn-primary">+ New Profile</button>
+        </div>
+      </header>
+
+      <!-- Content Views -->
+      <div class="content-body">
+        <!-- 1. OVERVIEW TAB -->
+        <section id="tab-overview" class="tab-pane active">
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <span class="metric-label">Active Lessons</span>
+              <span id="stat-lessons" class="metric-value">0</span>
+              <span class="metric-hint">Promoted across scopes</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Tracked Strategies</span>
+              <span id="stat-strategies" class="metric-value">0</span>
+              <span class="metric-hint">Empirical Bayesian scored</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Recorded Experiences</span>
+              <span id="stat-experiences" class="metric-value">0</span>
+              <span class="metric-hint">Completed developer tasks</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Database Footprint</span>
+              <span id="stat-db-size" class="metric-value">0 KB</span>
+              <span class="metric-hint">Local SQLite storage</span>
+            </div>
+          </div>
+
+          <div class="card-section">
+            <div class="section-header">
+              <h2>Recent Verified Lessons</h2>
+              <span class="badge badge-teal">Live Extraction</span>
+            </div>
+            <div id="recent-lessons-list" class="list-container">
+              <div class="empty-state">Loading lessons...</div>
+            </div>
+          </div>
+
+          <div class="card-section">
+            <div class="section-header">
+              <h2>Agent Integration Status</h2>
+            </div>
+            <div id="connector-status-grid" class="connector-cards">
+              <div class="empty-state">Loading connector status...</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. LESSONS TAB -->
+        <section id="tab-lessons" class="tab-pane">
+          <div class="section-header">
+            <h2>Accumulated Lessons & Knowledge Scopes</h2>
+            <div class="filter-row">
+              <span class="tag tag-global">GLOBAL</span>
+              <span class="tag tag-tech">TECHNOLOGY</span>
+              <span class="tag tag-domain">DOMAIN</span>
+              <span class="tag tag-project">PROJECT</span>
+            </div>
+          </div>
+          <div id="lessons-full-list" class="list-container">
+            <div class="empty-state">No lessons found in this profile.</div>
+          </div>
+        </section>
+
+        <!-- 3. STRATEGIES TAB -->
+        <section id="tab-strategies" class="tab-pane">
+          <div class="section-header">
+            <h2>Strategy Performance Ledger</h2>
+            <p class="section-sub">Bayesian expected success rates accounting for attempts, successes, and regressions.</p>
+          </div>
+          <div class="table-card">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Strategy Name</th>
+                  <th>Category</th>
+                  <th>Attempts</th>
+                  <th>Successes</th>
+                  <th>Regressions</th>
+                  <th>Bayesian Score</th>
+                </tr>
+              </thead>
+              <tbody id="strategies-table-body">
+                <tr><td colspan="6" class="text-center">Loading strategies...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 4. EXPERIENCES TAB -->
+        <section id="tab-experiences" class="tab-pane">
+          <div class="section-header">
+            <h2>Historical Development Experiences</h2>
+          </div>
+          <div id="experiences-full-list" class="list-container">
+            <div class="empty-state">No tasks recorded yet.</div>
+          </div>
+        </section>
+
+        <!-- 5. BENCHMARKS TAB -->
+        <section id="tab-benchmarks" class="tab-pane">
+          <div class="section-header">
+            <h2>Empirical Benchmark Evaluations</h2>
+            <button id="btn-run-benchmark" class="btn btn-primary">▶ Run Benchmark Suite</button>
+          </div>
+          <div id="benchmark-results-box" class="benchmark-card">
+            <div class="empty-state">Run a benchmark to compare Base Agent vs EvoDev Experienced.</div>
+          </div>
+        </section>
+
+        <!-- 6. INTEGRATIONS TAB -->
+        <section id="tab-integrations" class="tab-pane">
+          <div class="section-header">
+            <h2>Supported AI Coding Agent Connectors</h2>
+          </div>
+          <div class="integration-guide-grid">
+            <div class="integration-item">
+              <div class="integration-top">
+                <h3>OpenCode</h3>
+                <span id="badge-opencode" class="badge">Checking...</span>
+              </div>
+              <p>Communicates via Model Context Protocol (MCP) stdio and session export harvesting.</p>
+              <pre class="code-box">evodev connectors install-opencode</pre>
+            </div>
+            <div class="integration-item">
+              <div class="integration-top">
+                <h3>Gemini CLI / Antigravity</h3>
+                <span id="badge-gemini" class="badge">Checking...</span>
+              </div>
+              <p>Communicates via official <code>.agents/hooks.json</code> lifecycle hooks and MCP tools.</p>
+              <pre class="code-box">evodev connectors install-gemini</pre>
+            </div>
+            <div class="integration-item">
+              <div class="integration-top">
+                <h3>Generic IDE Adapter</h3>
+                <span class="badge badge-teal">ACTIVE</span>
+              </div>
+              <p>Standard REST JSON endpoints (<code>/api/query</code> and <code>/api/events</code>) for any IDE.</p>
+              <pre class="code-box">POST http://127.0.0.1:8765/api/query</pre>
+            </div>
+          </div>
+        </section>
+
+        <!-- 7. DOCTOR TAB -->
+        <section id="tab-doctor" class="tab-pane">
+          <div class="section-header">
+            <h2>System Health & Security Posture</h2>
+            <button id="btn-rerun-doctor" class="btn btn-secondary">Run Diagnostics</button>
+          </div>
+          <div id="doctor-results-table" class="table-card">
+            <div class="empty-state">Running diagnostics...</div>
+          </div>
+        </section>
+
+        <!-- 8. EXPERIENCE INSPECTOR TAB -->
+        <section id="tab-inspector" class="tab-pane">
+          <!-- Top Control Toolbar -->
+          <div class="inspector-toolbar">
+            <div class="toolbar-left">
+              <label for="insp-profile-select" class="toolbar-label">SELECT PROFILE:</label>
+              <select id="insp-profile-select" class="profile-dropdown" aria-label="Select Profile to Inspect">
+                <option value="">Loading profiles...</option>
+              </select>
+            </div>
+            <div class="toolbar-right">
+              <button id="btn-insp-refresh" class="btn btn-secondary">🔄 Refresh</button>
+              <button id="btn-insp-custom-file" class="btn btn-secondary">📂 Inspect .vxp File</button>
+              <button id="btn-insp-unlock" class="btn btn-secondary" style="display:none;">🔒 Unlock Encrypted</button>
+            </div>
+          </div>
+
+          <!-- State Banners -->
+          <div id="insp-banner-loading" class="state-banner state-banner-info" style="display:none;">
+            <span class="banner-spinner">⏳</span> <span>Loading profile inspection data from runtime engine...</span>
+          </div>
+
+          <div id="insp-banner-error" class="state-banner state-banner-danger" style="display:none;">
+            <span>⚠️</span> <span id="insp-error-text">An error occurred while inspecting profile.</span>
+          </div>
+
+          <div id="insp-banner-corrupt" class="state-banner state-banner-danger" style="display:none;">
+            <span>🚫</span> <div><strong>Corrupt Profile Archive Detected:</strong> <span id="insp-corrupt-text">Integrity digest failed or ZIP headers are invalid.</span></div>
+          </div>
+
+          <div id="insp-banner-encrypted" class="state-banner state-banner-warning" style="display:none;">
+            <span>🔒</span> <div><strong>Encrypted Archive (AES-256-GCM):</strong> Credentials required. Internal entry names and uncompressed sizes cannot be inspected without password. <button id="btn-banner-unlock" class="btn btn-small btn-secondary" style="margin-left:12px;">Enter Password</button></div>
+          </div>
+
+          <div id="insp-banner-unsupported" class="state-banner state-banner-warning" style="display:none;">
+            <span>⚡</span> <div><strong>Unsupported Schema Version:</strong> Profile manifest uses schema <code id="insp-unsupported-version-val">2.0.0</code>. Current EvoDev engine supports schema <code>1.0.0</code>.</div>
+          </div>
+
+          <div id="insp-banner-empty" class="state-banner state-banner-info" style="display:none;">
+            <span>ℹ️</span> <span>This profile is initialized but contains no recorded development experiences or lessons yet.</span>
+          </div>
+
+          <!-- Profile Metadata Header Card -->
+          <div class="profile-header-card">
+            <div class="profile-header-top">
+              <div class="profile-identity">
+                <h2 id="insp-profile-title">Profile Name</h2>
+                <div class="badge-cluster">
+                  <span id="insp-badge-version" class="badge">v1.0.0</span>
+                  <span id="insp-badge-load-state" class="badge badge-teal">ACTIVE RUNTIME</span>
+                  <span id="insp-badge-schema" class="badge">Schema v1.0.0</span>
+                  <span id="insp-badge-integrity" class="badge badge-teal">SHA-256 Valid</span>
+                </div>
+              </div>
+              <div class="profile-actions-safe">
+                <button id="btn-insp-delete-profile" class="btn btn-danger-outline btn-small" title="Delete Profile Safely">Delete Profile</button>
+              </div>
+            </div>
+            <p id="insp-profile-desc" class="profile-desc-text">Profile description...</p>
+            <div class="profile-meta-row">
+              <span id="insp-archive-path-display" class="meta-item">📁 Archive: <code>None (DB-backed)</code></span>
+              <span id="insp-updated-display" class="meta-item">🕒 Last Updated: <code>Just now</code></span>
+            </div>
+          </div>
+
+          <!-- High-Level Metric Tiles (Real stored data) -->
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <span class="metric-label">Archive File Size</span>
+              <span id="insp-stat-archive-size" class="metric-value">0 KB</span>
+              <span class="metric-hint">Compressed .vxp footprint</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Uncompressed Payload</span>
+              <span id="insp-stat-uncomp-size" class="metric-value">0 KB</span>
+              <span class="metric-hint">In-memory JSON payload</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Experiences Count</span>
+              <span id="insp-stat-exp-count" class="metric-value">0</span>
+              <span class="metric-hint">Completed developer tasks</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Verified Lessons</span>
+              <span id="insp-stat-verified-count" class="metric-value" style="color:var(--status-green);">0</span>
+              <span class="metric-hint">Passing test evidence</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Candidate Lessons</span>
+              <span id="insp-stat-candidate-count" class="metric-value" style="color:var(--accent-cyan);">0</span>
+              <span class="metric-hint">Pending confirmation</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Strategies Tracked</span>
+              <span id="insp-stat-strat-count" class="metric-value">0</span>
+              <span class="metric-hint">Bayesian scored records</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Domain Coverage</span>
+              <span id="insp-stat-domain-cov" class="metric-value">0%</span>
+              <span id="insp-domain-list" class="metric-hint">Coverage of core domains</span>
+            </div>
+          </div>
+
+          <!-- Sub-Tab Navigation Bar -->
+          <div class="subtabs-nav">
+            <button class="subtab-btn active" data-subtab="archive">📦 Archive Analysis (.vxp)</button>
+            <button class="subtab-btn" data-subtab="expertise">📊 Expertise & Competence</button>
+            <button class="subtab-btn" data-subtab="explorer">🔎 Knowledge Explorer</button>
+            <button class="subtab-btn" data-subtab="storage">💾 Storage Analytics</button>
+            <button class="subtab-btn" data-subtab="timeline">⏱️ Version Diff & Timeline</button>
+          </div>
+
+          <!-- SUB-PANE 1: ARCHIVE ANALYSIS -->
+          <div id="subpane-archive" class="subpane active">
+            <div class="card-section">
+              <div class="section-header">
+                <h3>Archive Member Enumeration & Compression Metrics</h3>
+                <span id="insp-archive-summary-badge" class="badge badge-teal">Real .vxp Inspection</span>
+              </div>
+              <div class="table-card">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Archive Entry</th>
+                      <th>Description</th>
+                      <th>Uncompressed Size</th>
+                      <th>Compressed Size</th>
+                      <th>Compression Ratio</th>
+                      <th>Record Count</th>
+                    </tr>
+                  </thead>
+                  <tbody id="insp-archive-entries-tbody">
+                    <tr><td colspan="6" class="text-center">Loading archive entries...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card-section">
+              <div class="section-header">
+                <h3>Cryptographic Integrity Verification (SHA-256)</h3>
+              </div>
+              <div id="insp-checksum-box" class="integrity-card">
+                <div class="empty-state">Computing integrity digests...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-PANE 2: EXPERTISE & COMPETENCE VISUALIZATIONS -->
+          <div id="subpane-expertise" class="subpane">
+            <div class="card-section">
+              <div class="section-header">
+                <div>
+                  <h3>Interactive Expertise Breakdown</h3>
+                  <p class="section-sub">Mathematically separates <strong>Observed Activity</strong> (attempts/tasks) from <strong>Verified Competence</strong> (empirically proven success rate).</p>
+                </div>
+                <div class="filter-row">
+                  <button class="btn btn-small filter-btn active" data-expertise-dim="domains">Domains</button>
+                  <button class="btn btn-small filter-btn" data-expertise-dim="technologies">Technologies</button>
+                  <button class="btn btn-small filter-btn" data-expertise-dim="frameworks">Frameworks</button>
+                  <button class="btn btn-small filter-btn" data-expertise-dim="task_categories">Task Categories</button>
+                </div>
+              </div>
+
+              <!-- Expertise Chart / Cards Container -->
+              <div id="insp-expertise-cards" class="expertise-grid">
+                <div class="empty-state">Calculating expertise metrics from actual stored data...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-PANE 3: KNOWLEDGE EXPLORER -->
+          <div id="subpane-explorer" class="subpane">
+            <div class="card-section">
+              <div class="explorer-filter-bar">
+                <div class="explorer-views-nav">
+                  <button class="view-switch-btn active" data-explorer-view="lessons">Lessons</button>
+                  <button class="view-switch-btn" data-explorer-view="strategies">Strategies</button>
+                  <button class="view-switch-btn" data-explorer-view="projects">Projects</button>
+                  <button class="view-switch-btn" data-explorer-view="technologies">Technologies</button>
+                  <button class="view-switch-btn" data-explorer-view="preferences">Preferences</button>
+                  <button class="view-switch-btn" data-explorer-view="benchmarks">Benchmarks</button>
+                </div>
+
+                <div class="explorer-inputs-row">
+                  <input type="text" id="insp-search-input" class="search-input" placeholder="Search keywords in title, triggers, strategies, projects..." />
+                  
+                  <select id="insp-scope-filter" class="filter-select">
+                    <option value="all">Scope: All</option>
+                    <option value="global">GLOBAL</option>
+                    <option value="domain">DOMAIN</option>
+                    <option value="technology">TECHNOLOGY</option>
+                    <option value="preferences">PREFERENCES</option>
+                    <option value="project">PROJECT</option>
+                  </select>
+
+                  <select id="insp-status-filter" class="filter-select">
+                    <option value="all">Status: All</option>
+                    <option value="verified">Verified Only</option>
+                    <option value="candidate">Candidate Only</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Explorer Results Container -->
+              <div id="insp-explorer-results" class="explorer-results-box">
+                <div class="empty-state">Loading knowledge records...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-PANE 4: STORAGE ANALYTICS -->
+          <div id="subpane-storage" class="subpane">
+            <div class="card-section">
+              <div class="section-header">
+                <div>
+                  <h3>Storage Footprint & Process Allocation</h3>
+                  <p class="section-sub">Measured distinguishing compressed archive size, uncompressed payload, SQLite DB files, cache, and OS process RAM.</p>
+                </div>
+                <button id="btn-insp-refresh-storage" class="btn btn-secondary btn-small">Recalculate Storage</button>
+              </div>
+
+              <div class="storage-metrics-cards">
+                <div class="metric-card">
+                  <span class="metric-label">Compressed .vxp Archive</span>
+                  <span id="storage-comp-archive" class="metric-value">0 KB</span>
+                  <span class="metric-hint">Exported package files</span>
+                </div>
+                <div class="metric-card">
+                  <span class="metric-label">Uncompressed Payload</span>
+                  <span id="storage-uncomp-archive" class="metric-value">0 KB</span>
+                  <span class="metric-hint">Expanded JSON schema</span>
+                </div>
+                <div class="metric-card">
+                  <span class="metric-label">SQLite Database File</span>
+                  <span id="storage-db-file" class="metric-value">0 KB</span>
+                  <span class="metric-hint">Main DB table allocation</span>
+                </div>
+                <div class="metric-card">
+                  <span class="metric-label">SQLite WAL / SHM</span>
+                  <span id="storage-db-wal" class="metric-value">0 KB</span>
+                  <span class="metric-hint">Write-ahead log journal</span>
+                </div>
+                <div class="metric-card">
+                  <span class="metric-label">Cache Directory</span>
+                  <span id="storage-cache-dir" class="metric-value">0 KB</span>
+                  <span class="metric-hint">Temporary & test cache</span>
+                </div>
+                <div class="metric-card">
+                  <span class="metric-label">Process RAM (RSS)</span>
+                  <span id="storage-ram-rss" class="metric-value">0 MB</span>
+                  <span class="metric-hint">Resident OS memory</span>
+                </div>
+                <div class="metric-card">
+                  <span class="metric-label">Process RAM (VMS)</span>
+                  <span id="storage-ram-vms" class="metric-value">0 MB</span>
+                  <span class="metric-hint">Virtual memory footprint</span>
+                </div>
+              </div>
+
+              <!-- Storage Breakdown Visual Table -->
+              <div class="table-card" style="margin-top:20px;">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Storage Component</th>
+                      <th>Measured Size</th>
+                      <th>Physical Path / Mechanism</th>
+                      <th>Optimization Note</th>
+                    </tr>
+                  </thead>
+                  <tbody id="insp-storage-table-body">
+                    <tr><td colspan="4" class="text-center">Calculating storage layers...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-PANE 5: VERSION DIFF & TIMELINE -->
+          <div id="subpane-timeline" class="subpane">
+            <div class="card-section">
+              <div class="section-header">
+                <div>
+                  <h3>Version Checkpoint Comparison</h3>
+                  <p class="section-sub">Detects additions, updates, removals, rollbacks, and benchmark deltas between versions.</p>
+                </div>
+              </div>
+
+              <div class="version-select-toolbar">
+                <div class="diff-picker">
+                  <label for="insp-diff-ver-a">Compare Version A:</label>
+                  <select id="insp-diff-ver-a" class="profile-dropdown"></select>
+                </div>
+                <span class="diff-arrow">➡️</span>
+                <div class="diff-picker">
+                  <label for="insp-diff-ver-b">With Version B:</label>
+                  <select id="insp-diff-ver-b" class="profile-dropdown"></select>
+                </div>
+                <button id="btn-insp-run-diff" class="btn btn-primary">Compare Checkpoints</button>
+              </div>
+
+              <div id="insp-diff-results-container" class="diff-output-box">
+                <div class="empty-state">Select two versions above to compute real differences.</div>
+              </div>
+            </div>
+
+            <!-- Chronological Timeline -->
+            <div class="card-section">
+              <div class="section-header">
+                <h3>Expertise Growth Timeline</h3>
+                <p class="section-sub">Chronological milestones showing knowledge accumulation and rollback events.</p>
+              </div>
+              <div id="insp-timeline-events-list" class="timeline-container">
+                <div class="empty-state">Loading checkpoint history...</div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- =========================================================================
+       MODALS & DETAIL DRAWERS
+       ========================================================================= -->
+
+  <!-- 1. Detailed Record Inspector Drawer/Modal -->
+  <div id="modal-record-detail" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="record-modal-title">
+    <div class="modal-card modal-large">
+      <div class="modal-header">
+        <div>
+          <span id="record-modal-badge" class="badge badge-teal">LESSON</span>
+          <h3 id="record-modal-title" style="margin-top:6px;">Record Title</h3>
+        </div>
+        <button id="btn-close-record-modal" class="modal-close-btn" aria-label="Close dialog">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div id="record-modal-content">
+          <!-- Dynamically filled: Provenance, Scope, Evidence, Confidence, Outcome History, Contradictions -->
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <div class="modal-footer-left">
+          <button id="btn-record-toggle-active" class="btn btn-secondary btn-small">Deactivate Lesson</button>
+          <button id="btn-record-edit" class="btn btn-secondary btn-small">Edit Recommendation</button>
+          <button id="btn-record-delete" class="btn btn-danger-outline btn-small">Delete Record</button>
+        </div>
+        <div class="modal-footer-right">
+          <button id="btn-close-record-modal-footer" class="btn btn-secondary">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Safe Mutation Confirmation Modal -->
+  <div id="modal-confirm-action" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="confirm-modal-title">Confirm Action</h3>
+        <button id="btn-close-confirm-modal" class="modal-close-btn" aria-label="Close dialog">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirm-modal-message" style="margin-bottom:12px;">Are you sure?</p>
+        <div class="version-notice-box">
+          🛡️ <strong>Safety Guarantee:</strong> An immutable version checkpoint will be recorded before applying this modification. You can roll back anytime from the Version History tab.
+        </div>
+        <div style="margin-top:12px;">
+          <label for="confirm-action-reason" style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px;">Reason / Checkpoint Note:</label>
+          <input type="text" id="confirm-action-reason" class="search-input" placeholder="e.g., Manual update to clarify trigger" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-cancel-confirm" class="btn btn-secondary">Cancel</button>
+        <button id="btn-proceed-confirm" class="btn btn-primary">Confirm & Create Version</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Password Unlock Modal (Encrypted Profiles) -->
+  <div id="modal-unlock-password" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="unlock-modal-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="unlock-modal-title">Unlock Encrypted Profile</h3>
+        <button id="btn-close-unlock-modal" class="modal-close-btn" aria-label="Close dialog">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom:12px;color:var(--text-secondary);">This .vxp archive is encrypted using AES-256-GCM. Enter the decryption password to inspect internal members, lessons, and statistics.</p>
+        <label for="unlock-password-input" style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px;">Decryption Password:</label>
+        <input type="password" id="unlock-password-input" class="search-input" placeholder="Enter password..." />
+      </div>
+      <div class="modal-footer">
+        <button id="btn-cancel-unlock" class="btn btn-secondary">Cancel</button>
+        <button id="btn-proceed-unlock" class="btn btn-primary">Decrypt & Inspect</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Inspect Custom File Modal -->
+  <div id="modal-inspect-file" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="file-inspect-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="file-inspect-title">Inspect Custom .vxp File</h3>
+        <button id="btn-close-file-modal" class="modal-close-btn" aria-label="Close dialog">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom:12px;color:var(--text-secondary);">Enter the absolute or relative filesystem path of a .vxp archive to inspect its format, entries, and integrity digests.</p>
+        <label for="inspect-file-path-input" style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px;">File Path:</label>
+        <input type="text" id="inspect-file-path-input" class="search-input" placeholder="e.g. ./exports/AndroidExpert.vxp" />
+      </div>
+      <div class="modal-footer">
+        <button id="btn-cancel-file-modal" class="btn btn-secondary">Cancel</button>
+        <button id="btn-proceed-inspect-file" class="btn btn-primary">Inspect Archive</button>
+      </div>
+    </div>
+  </div>
+
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
