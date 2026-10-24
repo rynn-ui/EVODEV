@@ -124,47 +124,78 @@ A responsive desktop GUI operating completely local and independent of the Core:
 
 ---
 
-## Windows Installation & Quickstart
+## Installation & Quickstart
 
-### 1. Installation
-Install in editable mode:
-```powershell
-pip install -e .
-```
+### Option A: Use EvoDev in Any Project (from GitHub)
+To bring EvoDev into any existing or cloned project:
 
-### 2. Initialize Core Profile
-```powershell
-evodev init --name PersonalCodingExpert
-```
+1. **Install EvoDev directly from GitHub**:
+   ```powershell
+   pip install git+https://github.com/rynn-ui/EVODEV.git
+   ```
 
-### 3. Launch Native Desktop Application
-```powershell
-evodev gui
-```
-Or run directly via Python module:
-```powershell
-python -m evodev.gui
-```
+2. **Initialize in your project repository**:
+   Navigate to your project directory and initialize:
+   ```powershell
+   cd /path/to/your-project
+   evodev init --name "MyProject"
+   ```
 
-### 4. Run System Health Diagnostics
-```powershell
-evodev doctor
-```
+3. **Connect your AI coding agent**:
+   Provision the configuration files for your agent in one command:
+   ```powershell
+   # For Gemini CLI / Google Antigravity (.agents/hooks.json & mcp_config.json)
+   evodev connectors install-gemini
 
-### 5. Connect AI Coding Agents
-```powershell
-# Connect OpenCode (Model Context Protocol stdio)
-evodev connectors install-opencode
+   # For OpenCode (opencode.json MCP stdio)
+   evodev connectors install-opencode
 
-# Connect Gemini CLI / Antigravity (Hooks + MCP)
-evodev connectors install-gemini
+   # For Kilo Code (.kilo/mcp.json)
+   evodev connectors install-kilo
 
-# Connect Kilo Code (.kilo/mcp.json)
-evodev connectors install-kilo
+   # For Nous Research Hermes Agent (hermes_config.json)
+   evodev connectors install-hermes
+   ```
 
-# Connect Hermes Agent (Tool schemas in hermes_config.json)
-evodev connectors install-hermes
-```
+---
+
+### Option B: Clone & Develop EvoDev Locally
+To clone the EvoDev source repository directly for development:
+
+1. **Clone the repository**:
+   ```powershell
+   git clone https://github.com/rynn-ui/EVODEV.git
+   cd EVODEV
+   ```
+
+2. **Install dependencies in editable mode**:
+   ```powershell
+   pip install -e .
+   ```
+
+3. **Initialize the default profile & database**:
+   ```powershell
+   evodev init --name PersonalCodingExpert
+   ```
+
+---
+
+### Launching the Desktop GUI & Diagnostics
+
+1. **Open the Desktop Application**:
+   ```powershell
+   evodev gui
+   ```
+   *Or launch directly via Python module:*
+   ```powershell
+   python -m evodev.gui
+   ```
+
+2. **Run System Health Diagnostics**:
+   ```powershell
+   evodev doctor
+   ```
+   *Verify database WAL mode, write permissions, connector readiness, and secret scrubber health.*
 
 ---
 
