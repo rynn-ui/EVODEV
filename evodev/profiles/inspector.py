@@ -75,7 +75,7 @@ class ArchiveInspectionResult(BaseModel):
     is_corrupt: bool = False
     is_unsupported_version: bool = False
     schema_version: Optional[str] = None
-    supported_schema_version: str = "1.0.0"
+    supported_schema_version: str = "2.0.0"
     encryption_details: Optional[Dict[str, Any]] = None
     entries: List[ArchiveEntryDetail] = Field(default_factory=list)
     total_uncompressed_bytes: Optional[int] = None
@@ -338,8 +338,8 @@ class ProfileInspector:
             1,
         )
 
-        schema_ver = profile.schema_version or "1.0.0"
-        is_schema_supported = schema_ver.startswith("1.")
+        schema_ver = profile.schema_version or "2.0.0"
+        is_schema_supported = schema_ver in {"1.0.0", "2.0.0"}
 
         return ProfileSummary(
             profile_id=profile.profile_id,
@@ -476,6 +476,8 @@ class ProfileInspector:
                     "strategies.json": "Empirical Bayesian success/regression outcome records",
                     "preferences.json": "User style rules, test runner choices, scope overrides",
                     "benchmarks.json": "Empirical evaluation scores across benchmark suites",
+                    "memories.json": "Categorized persistent memories across 8 cognitive partitions",
+                    "skills.json": "Self-improving, versioned skills and procedures",
                     "integrity.sha256": "SHA-256 cryptographic digest of uncompressed payload",
                 }
 
@@ -497,7 +499,7 @@ class ProfileInspector:
                         content_bytes = zf.read(info.filename)
                         if info.filename == "manifest.json":
                             record_count = 1
-                        elif info.filename in ("lessons.json", "strategies.json", "benchmarks.json"):
+                        elif info.filename in ("lessons.json", "strategies.json", "benchmarks.json", "memories.json", "skills.json"):
                             parsed = json.loads(content_bytes.decode("utf-8"))
                             record_count = len(parsed) if isinstance(parsed, list) else 0
                         elif info.filename == "preferences.json":
@@ -552,23 +554,47 @@ class ProfileInspector:
                         if "benchmarks.json" in namelist
                         else "[]"
                     )
+                    memories_data = (
+                        zf.read("memories.json").decode("utf-8")
+                        if "memories.json" in namelist
+                        else "[]"
+                    )
+                    skills_data = (
+                        zf.read("skills.json").decode("utf-8")
+                        if "skills.json" in namelist
+                        else "[]"
+                    )
 
-                    combined = (
+                    combined_v2 = (
+                        lessons_data + strategies_data + preferences_data + benchmarks_data + memories_data + skills_data
+                    ).encode("utf-8")
+                    combined_v1 = (
                         lessons_data + strategies_data + preferences_data + benchmarks_data
                     ).encode("utf-8")
-                    calculated_sha = compute_sha256(combined)
-                    integrity_verified = expected_sha == calculated_sha
+
+                    calc_v2 = compute_sha256(combined_v2)
+                    calc_v1 = compute_sha256(combined_v1)
+
+                    if expected_sha == calc_v2:
+                        calculated_sha = calc_v2
+                        integrity_verified = True
+                    elif expected_sha == calc_v1:
+                        calculated_sha = calc_v1
+                        integrity_verified = True
+                    else:
+                        calculated_sha = calc_v2
+                        integrity_verified = False
 
                 # 4. Manifest summary & schema version check
                 manifest_summary = None
                 is_unsupported_ver = False
-                schema_ver = "1.0.0"
+                schema_ver = "2.0.0"
 
                 if "manifest.json" in namelist:
                     try:
                         m_data = json.loads(zf.read("manifest.json").decode("utf-8"))
-                        schema_ver = m_data.get("schema_version", "1.0.0")
-                        is_unsupported_ver = not schema_ver.startswith("1.")
+                        schema_ver = m_data.get("schema_version", "2.0.0")
+                        is_unsupported_ver = schema_ver not in {"1.0.0", "2.0.0"}
                         manifest_summary = {
                             "profile_id": m_data.get("profile_id"),
                             "name": m_data.get("name"),
@@ -593,7 +619,7 @@ class ProfileInspector:
                 if is_unsupported_ver and is_corrupt:
                     err = f"Profile uses unsupported schema version {schema_ver} and archive integrity check failed."
                 elif is_unsupported_ver:
-                    err = f"Profile uses schema version {schema_ver}, which is not supported by this engine (supported: 1.0.0)."
+                    err = f"Profile uses schema version {schema_ver}, which is not supported by this engine (supported: 1.0.0, 2.0.0)."
                 elif is_corrupt:
                     err = "Archive integrity verification failed: Checksum mismatch or missing required members."
 

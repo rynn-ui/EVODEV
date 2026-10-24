@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
-    { name = "EvoDev Team" }
+    { name = "ryn" }
 ]
 dependencies = [
     "pydantic>=2.0.0",
@@ -29,6 +29,7 @@ test = [
 
 [project.scripts]
 evodev = "evodev.cli.main:app"
+evodev-gui = "evodev.gui.__main__:main"
 evodev-mcp = "evodev.connectors.opencode_mcp:main"
 
 [tool.pytest.ini_options]

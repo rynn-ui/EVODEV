@@ -1,0 +1,314 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "EvoDev: Self-Improving Developer Experience Architecture (v1.0.0)",
+    "quality_profile": "showcase",
+    "output": ".archify/architecture-evodev-system-20261023-192800/evodev-system.html"
+  },
+  "components": [
+    {
+      "id": "agents",
+      "type": "external",
+      "label": "AI Coding Agents",
+      "sublabel": "OpenCode / Gemini / Hermes",
+      "tag": "multi-agent",
+      "icon": "external",
+      "pos": [40, 200],
+      "size": [160, 64]
+    },
+    {
+      "id": "desktop_gui",
+      "type": "frontend",
+      "label": "Native Desktop GUI",
+      "sublabel": "Tkinter 14 views & WorkerPool",
+      "tag": "zero UI freeze",
+      "icon": "frontend",
+      "pos": [260, 50],
+      "size": [170, 64]
+    },
+    {
+      "id": "connectors",
+      "type": "backend",
+      "label": "Unified Connectors",
+      "sublabel": "MCP stdio / hooks / Hermes",
+      "tag": "adapter registry",
+      "icon": "backend",
+      "pos": [260, 200],
+      "size": [170, 64]
+    },
+    {
+      "id": "security",
+      "type": "security",
+      "label": "Security Boundary",
+      "sublabel": "Secret scrubber & path defense",
+      "tag": "entropy + regex",
+      "icon": "security",
+      "pos": [260, 350],
+      "size": [170, 64]
+    },
+    {
+      "id": "collector",
+      "type": "backend",
+      "label": "Collector Service",
+      "sublabel": "Event normalizer & Git tracker",
+      "tag": "session buffer",
+      "icon": "backend",
+      "pos": [260, 500],
+      "size": [170, 64]
+    },
+    {
+      "id": "orchestration",
+      "type": "backend",
+      "label": "Specialist Delegation",
+      "sublabel": "6 roles & human approval gate",
+      "tag": "orchestrator",
+      "icon": "backend",
+      "pos": [510, 50],
+      "size": [170, 64]
+    },
+    {
+      "id": "retrieval",
+      "type": "backend",
+      "label": "Retrieval Engine",
+      "sublabel": "Multi-factor Bayesian ranker",
+      "tag": "Bayesian scoring",
+      "icon": "backend",
+      "pos": [510, 200],
+      "size": [170, 64]
+    },
+    {
+      "id": "learning",
+      "type": "backend",
+      "label": "Learning Engine",
+      "sublabel": "Extractor, Bayes & consolidator",
+      "tag": "verified lessons",
+      "icon": "backend",
+      "pos": [510, 350],
+      "size": [170, 64]
+    },
+    {
+      "id": "verif_gate",
+      "type": "security",
+      "label": "Verification Gate",
+      "sublabel": "Empirical proof: tests & exit 0",
+      "tag": "gatekeeper",
+      "icon": "security",
+      "pos": [510, 500],
+      "size": [170, 64]
+    },
+    {
+      "id": "skills_engine",
+      "type": "backend",
+      "label": "Self-Improving Skills",
+      "sublabel": "SemVer lifecycle & test suites",
+      "tag": "skill engine",
+      "icon": "backend",
+      "pos": [760, 50],
+      "size": [170, 64]
+    },
+    {
+      "id": "memory_engine",
+      "type": "database",
+      "label": "Categorized Memory",
+      "sublabel": "8 partitions & scope guards",
+      "tag": "persistent recall",
+      "icon": "database",
+      "pos": [760, 200],
+      "size": [170, 64]
+    },
+    {
+      "id": "db_store",
+      "type": "database",
+      "label": "SQLite WAL Store",
+      "sublabel": "Thread-safe local DB (WAL mode)",
+      "tag": "evodev.db",
+      "icon": "database",
+      "pos": [760, 350],
+      "size": [170, 64]
+    },
+    {
+      "id": "scheduler",
+      "type": "backend",
+      "label": "Automation Scheduler",
+      "sublabel": "Persistent SQLite maintenance jobs",
+      "tag": "background runner",
+      "icon": "backend",
+      "pos": [760, 500],
+      "size": [170, 64]
+    },
+    {
+      "id": "checkpoints",
+      "type": "backend",
+      "label": "Safe Checkpoints",
+      "sublabel": "Git patch diffs & DB rollback",
+      "tag": "non-destructive",
+      "icon": "backend",
+      "pos": [1010, 200],
+      "size": [170, 64]
+    },
+    {
+      "id": "profile_mgr",
+      "type": "database",
+      "label": "Profile Engine (.vxp v2)",
+      "sublabel": "Tamper-evident ZIP & AES-GCM",
+      "tag": "author: ryn",
+      "icon": "database",
+      "pos": [1010, 350],
+      "size": [170, 64]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "EvoDev Core Engine (Local-First Experience Layer)",
+      "wraps": [
+        "desktop_gui",
+        "connectors",
+        "security",
+        "collector",
+        "orchestration",
+        "retrieval",
+        "learning",
+        "verif_gate",
+        "memory_engine",
+        "skills_engine",
+        "db_store",
+        "scheduler",
+        "checkpoints",
+        "profile_mgr"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "agents-to-connectors",
+      "from": "agents",
+      "to": "connectors",
+      "label": "tool actions",
+      "variant": "emphasis"
+    },
+    {
+      "id": "desktop-to-orchestration",
+      "from": "desktop_gui",
+      "to": "orchestration",
+      "label": "delegated tasks",
+      "variant": "default"
+    },
+    {
+      "id": "connectors-to-security",
+      "from": "connectors",
+      "to": "security",
+      "label": "stream events",
+      "variant": "default"
+    },
+    {
+      "id": "security-to-collector",
+      "from": "security",
+      "to": "collector",
+      "label": "redact secrets",
+      "variant": "security"
+    },
+    {
+      "id": "collector-to-gate",
+      "from": "collector",
+      "to": "verif_gate",
+      "label": "session outcome",
+      "variant": "default"
+    },
+    {
+      "id": "gate-to-learning",
+      "from": "verif_gate",
+      "to": "learning",
+      "label": "verified pass",
+      "variant": "emphasis"
+    },
+    {
+      "id": "learning-to-db",
+      "from": "learning",
+      "to": "db_store",
+      "label": "upsert lessons",
+      "variant": "emphasis"
+    },
+    {
+      "id": "retrieval-to-connectors",
+      "from": "retrieval",
+      "to": "connectors",
+      "label": "inject advisory",
+      "variant": "emphasis"
+    },
+    {
+      "id": "db-to-memory",
+      "from": "db_store",
+      "to": "memory_engine",
+      "label": "partitioned recall",
+      "variant": "default"
+    },
+    {
+      "id": "skills-to-db",
+      "from": "skills_engine",
+      "to": "db_store",
+      "label": "skill versions",
+      "variant": "default"
+    },
+    {
+      "id": "checkpoints-to-db",
+      "from": "checkpoints",
+      "to": "db_store",
+      "label": "wal snapshot",
+      "variant": "default"
+    },
+    {
+      "id": "scheduler-to-db",
+      "from": "scheduler",
+      "to": "db_store",
+      "label": "scheduled tasks",
+      "variant": "default"
+    },
+    {
+      "id": "db-to-profile",
+      "from": "db_store",
+      "to": "profile_mgr",
+      "label": "package .vxp",
+      "variant": "default"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Empirical Verification Gate",
+      "items": [
+        "Absence of error messages is strictly NOT proof of success",
+        "Lessons promoted only with passing tests (pytest rc=0), compiler exit 0, or user confirmation",
+        "Anti-patterns captured from failed attempts to steer agents away from known traps"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Categorized Memory & Self-Improving Skills",
+      "items": [
+        "8 partitions: preferences, architecture, lessons, anti_patterns, skills, and project private",
+        "Self-improving skills with SemVer lifecycle, empirical evaluation, and safe rollback",
+        "Multi-factor Bayesian scoring accounts for scope, technology Jaccard, and problem BM25"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Portable Profiles (.vxp v2) & Safe Lifecycle",
+      "items": [
+        "Author: ryn | Package Version: 1.0.0 | Full backwards-compatible .vxp v1/v2 format",
+        "Local-first SQLite with WAL mode and zero third-party cloud embedding dependencies",
+        "Tamper-evident archives with SHA-256 integrity digests and AES-256-GCM encryption"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Native Desktop GUI & Unified Connectors",
+      "items": [
+        "14-view dark slate Tkinter desktop GUI with WorkerPool off-thread async dispatch",
+        "Zero-freeze Overview & Telemetry with cached binary discovery and async health checks",
+        "Unified connectors for OpenCode, Gemini CLI / Antigravity, Kilo Code, and Hermes"
+      ]
+    }
+  ]
+}

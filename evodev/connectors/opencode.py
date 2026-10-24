@@ -9,6 +9,18 @@ import uuid
 
 from evodev.collector.collector_service import CollectorService
 from evodev.connectors.base import BaseAgentConnector
+from evodev.connectors.contract import (
+    ConnectorCapabilities,
+    ConnectorHealth,
+    ConnectorIdentity,
+    ContextRequest,
+    ContextResponse,
+    EventIngestResponse,
+    HealthStatus,
+    OutcomeReport,
+    OutcomeResponse,
+    RetrievedLessonSnippet,
+)
 from evodev.models.events import (
     NormalizedEvent,
     TaskFinishedEvent,
@@ -16,9 +28,14 @@ from evodev.models.events import (
     ToolInvokedEvent,
     ToolResultEvent,
 )
+from evodev.models.experience import StrategyOutcome
 from evodev.retrieval.context_assembler import ContextAssembler
 from evodev.retrieval.engine import RetrievalEngine
-from evodev.storage.repositories import LessonRepository, ProfileRepository
+from evodev.storage.repositories import (
+    LessonRepository,
+    ProfileRepository,
+    StrategyRepository,
+)
 
 
 class OpenCodeConnector(BaseAgentConnector):
@@ -28,40 +45,106 @@ class OpenCodeConnector(BaseAgentConnector):
         self,
         lesson_repo: Optional[LessonRepository] = None,
         profile_repo: Optional[ProfileRepository] = None,
+        strategy_repo: Optional[StrategyRepository] = None,
+        collector_service: Optional[CollectorService] = None,
     ):
         self.lesson_repo = lesson_repo
         self.profile_repo = profile_repo
+        self.strategy_repo = strategy_repo
+        self.collector = collector_service
         self.engine = (
             RetrievalEngine(lesson_repo, profile_repo)
             if (lesson_repo and profile_repo)
             else None
         )
         self.assembler = ContextAssembler()
+        self._cached_available: Optional[bool] = None
+        self._cached_version: Optional[str] = None
+        self._version_checked: bool = False
+        self._binary_path: Optional[str] = None
 
     def get_name(self) -> str:
         return "OpenCode"
 
-    def is_available(self) -> bool:
-        """Check if opencode executable is present in PATH."""
-        return shutil.which("opencode") is not None
+    def get_identity(self) -> ConnectorIdentity:
+        return ConnectorIdentity(
+            adapter_id="opencode",
+            agent_name="OpenCode",
+            agent_version=self.get_version(),
+            adapter_version="2.0.0",
+            description="OpenCode integration via Model Context Protocol (MCP) stdio and session export harvesting",
+        )
 
-    def get_version(self) -> Optional[str]:
-        """Query installed OpenCode version."""
-        if not self.is_available():
+    def is_available(self, refresh: bool = False) -> bool:
+        """Check if opencode executable is present in PATH with cached result."""
+        if self._cached_available is None or refresh:
+            self._binary_path = shutil.which("opencode")
+            self._cached_available = self._binary_path is not None
+        return self._cached_available
+
+    def get_version(self, refresh: bool = False) -> Optional[str]:
+        """Query installed OpenCode version once and cache the result."""
+        if not self.is_available(refresh=refresh):
+            self._cached_version = None
+            self._version_checked = True
             return None
+        if self._version_checked and not refresh:
+            return self._cached_version
+        self._version_checked = True
         try:
+            cmd = self._binary_path or "opencode"
             res = subprocess.run(
-                ["opencode", "--version"],
+                [cmd, "--version"],
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=3,
             )
             if res.returncode == 0:
-                return res.stdout.strip()
+                self._cached_version = res.stdout.strip()
+                return self._cached_version
         except Exception:
             pass
+        self._cached_version = None
         return None
+
+    def get_capabilities(self) -> ConnectorCapabilities:
+        return ConnectorCapabilities(
+            can_retrieve_context=True,
+            can_ingest_events=True,
+            can_report_outcomes=True,
+            can_verify=True,
+            supported_event_types=[
+                "task_started",
+                "tool_invoked",
+                "tool_result",
+                "verification",
+                "task_finished",
+            ],
+            supported_scopes=["global", "domain", "technology", "project", "preferences"],
+            mcp_compliant=True,
+            lifecycle_hooks_supported=False,
+        )
+
+    def health_check(self) -> ConnectorHealth:
+        avail = self.is_available()
+        ver = self.get_version() if avail else None
+        status = HealthStatus.HEALTHY if avail else HealthStatus.DEGRADED
+        details = (
+            f"OpenCode CLI detected ({ver}). MCP stdio interface ready."
+            if avail
+            else "OpenCode binary not detected in PATH. MCP server remains operational for manual config."
+        )
+        return ConnectorHealth(
+            status=status,
+            is_available=avail,
+            details=details,
+            diagnostics={
+                "version": ver or "Not installed",
+                "mcp_server": "evodev.connectors.opencode_mcp",
+                "binary_path": self._binary_path,
+            },
+        )
 
     def get_status(self) -> Dict[str, Any]:
         available = self.is_available()
@@ -105,6 +188,105 @@ class OpenCodeConnector(BaseAgentConnector):
         active_p = self.profile_repo.get_active() if self.profile_repo else None
         p_name = active_p.name if active_p else "Default"
         return self.assembler.assemble(scored, profile_name=p_name)
+
+    def get_context(self, request: ContextRequest) -> ContextResponse:
+        if not self.engine:
+            return ContextResponse(
+                correlation_id=request.correlation_id,
+                profile_name="Default",
+                advisory_markdown="",
+                matched_count=0,
+                lessons=[],
+            )
+
+        profile_id = request.profile_id
+        if not profile_id and self.profile_repo:
+            active_p = self.profile_repo.get_active()
+            profile_id = active_p.profile_id if active_p else "default"
+            profile_name = active_p.name if active_p else "Default"
+        else:
+            profile_name = profile_id or "Default"
+
+        scored = self.engine.retrieve_relevant_lessons(
+            task_description=request.task_description,
+            project_id=request.project_id,
+            domain=request.domain,
+            technologies=request.technologies,
+            profile_id=profile_id,
+            min_score=request.min_score,
+            limit=request.limit,
+        )
+
+        advisory_md = self.assembler.assemble(scored, profile_name=profile_name)
+        snippets = [
+            RetrievedLessonSnippet(
+                lesson_id=lesson.id,
+                title=lesson.title,
+                score=round(score, 3),
+                scope=lesson.scope,
+                recommended_strategy=lesson.recommended_strategy,
+                anti_patterns=lesson.anti_patterns,
+                confidence=lesson.confidence,
+                origin_project_ids=lesson.provenance.origin_project_ids if lesson.provenance else [],
+            )
+            for lesson, score in scored
+        ]
+
+        return ContextResponse(
+            correlation_id=request.correlation_id,
+            profile_name=profile_name,
+            advisory_markdown=advisory_md,
+            matched_count=len(snippets),
+            lessons=snippets,
+        )
+
+    def ingest_event(self, event: NormalizedEvent | Dict[str, Any]) -> EventIngestResponse:
+        if not self.collector:
+            raise RuntimeError("CollectorService not provided to OpenCodeConnector")
+        if isinstance(event, NormalizedEvent):
+            ingested = self.collector.ingest_event(event)
+        else:
+            ingested = self.collector.ingest_raw_event(event)
+        return EventIngestResponse(
+            status="ok",
+            event_id=ingested.id,
+            event_type=ingested.event_type.value,
+            duplicate=False,
+        )
+
+    def report_outcome(self, outcome: OutcomeReport) -> OutcomeResponse:
+        if not self.strategy_repo or not self.profile_repo:
+            raise RuntimeError("Repositories not provided to OpenCodeConnector")
+
+        outcome_map = {
+            "success": StrategyOutcome.SUCCESS,
+            "failure": StrategyOutcome.FAILURE,
+            "regression": StrategyOutcome.REGRESSION,
+        }
+        enum_val = outcome_map.get(outcome.outcome.lower(), StrategyOutcome.SUCCESS)
+
+        profile_id = outcome.profile_id
+        if not profile_id:
+            active_p = self.profile_repo.get_active()
+            profile_id = active_p.profile_id if active_p else "default"
+
+        record = self.strategy_repo.record_outcome(
+            profile_id=profile_id,
+            name=outcome.strategy_name,
+            category=outcome.domain,
+            outcome=enum_val,
+        )
+
+        return OutcomeResponse(
+            correlation_id=outcome.correlation_id,
+            success=True,
+            strategy_name=record.name,
+            bayesian_score=record.bayesian_score,
+            attempts_count=record.attempts_count,
+            success_count=record.success_count,
+            regression_count=record.regression_count,
+            message=f"Recorded OpenCode strategy outcome for '{record.name}'. Score: {record.bayesian_score:.2f}",
+        )
 
     def generate_config(self, python_executable: str = "python") -> Dict[str, Any]:
         """Generate MCP configuration structure for OpenCode."""

@@ -6,6 +6,8 @@ import uuid
 from pydantic import BaseModel, Field
 
 from evodev.models.experience import Lesson, StrategyRecord
+from evodev.models.memory import MemoryItem
+from evodev.models.skills import Skill
 
 
 class ProfileStats(BaseModel):
@@ -16,6 +18,8 @@ class ProfileStats(BaseModel):
     total_experiences: int = 0
     verified_lessons_count: int = 0
     total_benchmarks: int = 0
+    total_memories: int = 0
+    total_skills: int = 0
 
 
 class ProfileManifest(BaseModel):
@@ -25,8 +29,8 @@ class ProfileManifest(BaseModel):
     name: str = Field(description="User-defined profile name, e.g. AndroidExpert.vxp")
     version: str = Field(default="1.0.0", description="Semantic profile version")
     description: str = Field(default="Accumulated EvoDev experience profile")
-    author: str = Field(default="EvoDev Agent")
-    schema_version: str = Field(default="1.0.0")
+    author: str = Field(default="ryn")
+    schema_version: str = Field(default="2.0.0")
     domains: List[str] = Field(default_factory=list)
     technologies: List[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -45,6 +49,8 @@ class ProfilePackage(BaseModel):
     strategies: List[StrategyRecord] = Field(default_factory=list)
     preferences: Dict[str, Any] = Field(default_factory=dict)
     benchmarks: List[Dict[str, Any]] = Field(default_factory=list)
+    memories: List[MemoryItem] = Field(default_factory=list)
+    skills: List[Skill] = Field(default_factory=list)
 
 
 class ProfileVersion(BaseModel):

@@ -12,7 +12,7 @@ class SecretRedactor:
         # Anthropic (test before OpenAI sk- prefix)
         ("ANTHROPIC_KEY", re.compile(r"\bsk-ant-[A-Za-z0-9_-]{32,}\b")),
         # OpenAI
-        ("OPENAI_KEY", re.compile(r"\bsk-(?!ant-)(?:proj-)?[A-Za-z0-9_-]{32,}\b")),
+        ("OPENAI_KEY", re.compile(r"\bsk-(?!ant-)(?:proj-)?[A-Za-z0-9_-]{20,}\b")),
         # GitHub Tokens
         ("GITHUB_TOKEN", re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36}\b")),
         ("GITHUB_PAT", re.compile(r"\bgithub_pat_[A-Za-z0-9_]{82}\b")),
@@ -103,6 +103,8 @@ class SecretRedactor:
         elif isinstance(data, tuple):
             return tuple(self.redact_data(item) for item in data)
         return data
+
+    redact_dict = redact_data
 
 
 _GLOBAL_REDACTOR = SecretRedactor()

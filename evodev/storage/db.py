@@ -75,6 +75,11 @@ _DB_MANAGER: Optional[DatabaseManager] = None
 def get_db(config: Optional[EvoDevConfig] = None) -> DatabaseManager:
     """Get the singleton DatabaseManager instance based on configuration."""
     global _DB_MANAGER
+    if config is not None:
+        target_path = str(config.db_path)
+        if _DB_MANAGER is not None and _DB_MANAGER.db_path != target_path:
+            _DB_MANAGER.close()
+            _DB_MANAGER = None
     if _DB_MANAGER is None:
         cfg = config or load_config()
         _DB_MANAGER = DatabaseManager(cfg.db_path)

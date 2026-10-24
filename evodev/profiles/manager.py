@@ -18,7 +18,9 @@ from evodev.storage.repositories import (
     BenchmarkRepository,
     ExperienceRepository,
     LessonRepository,
+    MemoryRepository,
     ProfileRepository,
+    SkillRepository,
     StrategyRepository,
 )
 
@@ -34,6 +36,8 @@ class ProfileManager:
         experience_repo: ExperienceRepository,
         benchmark_repo: Optional[BenchmarkRepository] = None,
         config: Optional[EvoDevConfig] = None,
+        memory_repo: Optional[MemoryRepository] = None,
+        skill_repo: Optional[SkillRepository] = None,
     ):
         self.profile_repo = profile_repo
         self.lesson_repo = lesson_repo
@@ -41,6 +45,8 @@ class ProfileManager:
         self.experience_repo = experience_repo
         self.benchmark_repo = benchmark_repo
         self.config = config or load_config()
+        self.memory_repo = memory_repo
+        self.skill_repo = skill_repo
         self.archive_format = ProfileArchiveFormat(self.config)
 
     def _resolve_profile(self, identifier: str) -> Optional[ProfileManifest]:
@@ -107,6 +113,24 @@ class ProfileManager:
             )
             self.strategy_repo.save(s_copy)
 
+        # Duplicate memories if repository available
+        if self.memory_repo:
+            memories = self.memory_repo.list_by_profile(source.profile_id, active_only=False)
+            for m in memories:
+                m_copy = m.model_copy(
+                    update={"id": str(uuid.uuid4()), "profile_id": new_manifest.profile_id}
+                )
+                self.memory_repo.save(m_copy)
+
+        # Duplicate skills if repository available
+        if self.skill_repo:
+            skills = self.skill_repo.list_skills(source.profile_id)
+            for sk in skills:
+                sk_copy = sk.model_copy(
+                    update={"id": str(uuid.uuid4()), "profile_id": new_manifest.profile_id}
+                )
+                self.skill_repo.save_skill(sk_copy)
+
         return new_manifest
 
     def delete_profile(self, identifier: str) -> bool:
@@ -155,6 +179,12 @@ class ProfileManager:
         benchmarks = (
             self.benchmark_repo.get_metrics(profile.profile_id) if self.benchmark_repo else []
         )
+        memories = (
+            self.memory_repo.list_by_profile(profile.profile_id, active_only=True)
+            if self.memory_repo
+            else []
+        )
+        skills = self.skill_repo.list_skills(profile.profile_id) if self.skill_repo else []
 
         package = ProfilePackage(
             manifest=profile,
@@ -162,6 +192,8 @@ class ProfileManager:
             strategies=strategies,
             preferences={"exported_at": datetime.now(timezone.utc).isoformat()},
             benchmarks=benchmarks,
+            memories=memories,
+            skills=skills,
         )
 
         target_file = (
@@ -200,6 +232,18 @@ class ProfileManager:
         for strategy in package.strategies:
             strategy.profile_id = manifest.profile_id
             self.strategy_repo.save(strategy)
+
+        # Save imported memories if repo available
+        if self.memory_repo and package.memories:
+            for memory in package.memories:
+                memory.profile_id = manifest.profile_id
+                self.memory_repo.save(memory)
+
+        # Save imported skills if repo available
+        if self.skill_repo and package.skills:
+            for skill in package.skills:
+                skill.profile_id = manifest.profile_id
+                self.skill_repo.save_skill(skill)
 
         # Save initial checkpoint version
         self.create_version(manifest.profile_id, message="Imported from .vxp archive")

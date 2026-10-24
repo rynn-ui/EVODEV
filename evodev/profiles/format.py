@@ -8,7 +8,9 @@ import zipfile
 
 from evodev.config import EvoDevConfig, load_config
 from evodev.models.experience import Lesson, StrategyRecord
+from evodev.models.memory import MemoryItem
 from evodev.models.profile import ProfileManifest, ProfilePackage
+from evodev.models.skills import Skill
 from evodev.security.crypto import (
     compute_sha256,
     decrypt_payload,
@@ -46,9 +48,12 @@ class ProfileArchiveFormat:
         preferences_data = json.dumps(package.preferences, indent=2)
         benchmarks_data = json.dumps(package.benchmarks, indent=2)
 
+        memories_data = json.dumps([m.model_dump(mode="json") for m in package.memories], indent=2)
+        skills_data = json.dumps([s.model_dump(mode="json") for s in package.skills], indent=2)
+
         # 2. Compute canonical integrity checksum over payload data
         combined_payload = (
-            lessons_data + strategies_data + preferences_data + benchmarks_data
+            lessons_data + strategies_data + preferences_data + benchmarks_data + memories_data + skills_data
         ).encode("utf-8")
         checksum = compute_sha256(combined_payload)
 
@@ -60,6 +65,8 @@ class ProfileArchiveFormat:
             1 for l in package.lessons if l.evidence and any(e.passed for e in l.evidence)
         )
         package.manifest.stats.total_benchmarks = len(package.benchmarks)
+        package.manifest.stats.total_memories = len(package.memories)
+        package.manifest.stats.total_skills = len(package.skills)
         manifest_data = package.manifest.model_dump_json(indent=2)
 
         # 4. Pack into in-memory ZIP archive
@@ -70,6 +77,8 @@ class ProfileArchiveFormat:
             zf.writestr("strategies.json", strategies_data)
             zf.writestr("preferences.json", preferences_data)
             zf.writestr("benchmarks.json", benchmarks_data)
+            zf.writestr("memories.json", memories_data)
+            zf.writestr("skills.json", skills_data)
             zf.writestr("integrity.sha256", checksum)
 
         zip_bytes = zip_buf.getvalue()
@@ -134,16 +143,31 @@ class ProfileArchiveFormat:
                     if "benchmarks.json" in namelist
                     else "[]"
                 )
+                memories_json = (
+                    zf.read("memories.json").decode("utf-8")
+                    if "memories.json" in namelist
+                    else "[]"
+                )
+                skills_json = (
+                    zf.read("skills.json").decode("utf-8")
+                    if "skills.json" in namelist
+                    else "[]"
+                )
                 expected_checksum = zf.read("integrity.sha256").decode("utf-8").strip()
 
-                # 4. Verify cryptographic integrity checksum
-                combined = (
+                # 4. Verify cryptographic integrity checksum (supports v2 and legacy v1)
+                combined_v2 = (
+                    lessons_json + strategies_json + preferences_json + benchmarks_json + memories_json + skills_json
+                ).encode("utf-8")
+                combined_v1 = (
                     lessons_json + strategies_json + preferences_json + benchmarks_json
                 ).encode("utf-8")
-                calculated_checksum = compute_sha256(combined)
-                if calculated_checksum != expected_checksum:
+                checksum_v2 = compute_sha256(combined_v2)
+                checksum_v1 = compute_sha256(combined_v1)
+
+                if expected_checksum not in (checksum_v2, checksum_v1):
                     raise MalformedProfileError(
-                        f"Integrity digest verification failed! Archive may have been tampered with. Expected {expected_checksum}, calculated {calculated_checksum}."
+                        f"Integrity digest verification failed! Archive may have been tampered with. Expected {expected_checksum}, calculated {checksum_v2}."
                     )
 
                 # 5. Parse typed data models
@@ -152,9 +176,13 @@ class ProfileArchiveFormat:
                 strategies_raw = json.loads(strategies_json)
                 preferences = json.loads(preferences_json)
                 benchmarks = json.loads(benchmarks_json)
+                memories_raw = json.loads(memories_json)
+                skills_raw = json.loads(skills_json)
 
                 lessons = [Lesson.model_validate(l) for l in lessons_raw]
                 strategies = [StrategyRecord.model_validate(s) for s in strategies_raw]
+                memories = [MemoryItem.model_validate(m) for m in memories_raw]
+                skills = [Skill.model_validate(s) for s in skills_raw]
 
                 return ProfilePackage(
                     manifest=manifest,
@@ -162,6 +190,8 @@ class ProfileArchiveFormat:
                     strategies=strategies,
                     preferences=preferences,
                     benchmarks=benchmarks,
+                    memories=memories,
+                    skills=skills,
                 )
 
         except zipfile.BadZipFile as e:

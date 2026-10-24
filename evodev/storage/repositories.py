@@ -6,15 +6,29 @@ import sqlite3
 from typing import Any, Dict, List, Optional
 import uuid
 
+from evodev.models.checkpoints import CheckpointRecord, CheckpointType
 from evodev.models.events import NormalizedEvent
 from evodev.models.experience import (
+    EpistemicType,
     ExperienceRecord,
     KnowledgeScope,
     Lesson,
+    Provenance,
     StrategyOutcome,
     StrategyRecord,
+    VerificationEvidence,
 )
+from evodev.models.memory import MemoryCategory, MemoryItem
 from evodev.models.profile import ProfileManifest, ProfileStats, ProfileVersion
+from evodev.models.scheduler import JobStatus, JobType, ScheduledJob
+from evodev.models.skills import (
+    ProcedureStep,
+    Skill,
+    SkillEvaluation,
+    SkillPrerequisite,
+    SkillStatus,
+    SkillVersion,
+)
 from evodev.storage.db import DatabaseManager
 
 
@@ -376,6 +390,8 @@ class LessonRepository:
             cursor = conn.execute("DELETE FROM lessons WHERE id = ?;", (lesson_id,))
             return cursor.rowcount > 0
 
+    create = save
+
     def _row_to_lesson(self, row: sqlite3.Row) -> Lesson:
         """Deserialize database row into Lesson model."""
         evidence_data = json.loads(row["evidence_json"])
@@ -450,6 +466,13 @@ class StrategyRepository:
                 (profile_id,),
             ).fetchall()
             return [self._row_to_strategy(r) for r in rows]
+
+    def count_by_profile(self, profile_id: str) -> int:
+        """Count strategies associated with a profile quickly."""
+        with self.db.session() as conn:
+            row = conn.execute("SELECT COUNT(*) as cnt FROM strategies WHERE profile_id = ?;", (profile_id,)).fetchone()
+            return row["cnt"] if row else 0
+
 
     def record_outcome(
         self,
@@ -603,3 +626,545 @@ class BenchmarkRepository:
                 }
                 for r in rows
             ]
+
+
+class MemoryRepository:
+    """Persistence operations for categorized persistent memory items."""
+
+    def __init__(self, db: DatabaseManager):
+        self.db = db
+
+    def save(self, memory: MemoryItem) -> MemoryItem:
+        """Create or update a persistent memory item."""
+        with self.db.session() as conn:
+            conn.execute(
+                """
+                INSERT INTO memories (
+                    id, profile_id, category, title, content_json, scope, project_id,
+                    confidence, epistemic_type, provenance_json, evidence_json, is_active,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    title = excluded.title,
+                    content_json = excluded.content_json,
+                    scope = excluded.scope,
+                    project_id = excluded.project_id,
+                    confidence = excluded.confidence,
+                    epistemic_type = excluded.epistemic_type,
+                    provenance_json = excluded.provenance_json,
+                    evidence_json = excluded.evidence_json,
+                    is_active = excluded.is_active,
+                    updated_at = excluded.updated_at;
+                """,
+                (
+                    memory.id,
+                    memory.profile_id,
+                    memory.category.value,
+                    memory.title,
+                    json.dumps(memory.content),
+                    memory.scope.value,
+                    memory.project_id,
+                    memory.confidence,
+                    memory.epistemic_type.value,
+                    memory.provenance.model_dump_json(),
+                    json.dumps([e.model_dump(mode="json") for e in memory.evidence]),
+                    1 if memory.is_active else 0,
+                    memory.created_at.isoformat(),
+                    memory.updated_at.isoformat(),
+                ),
+            )
+        return memory
+
+    def get_by_id(self, memory_id: str) -> Optional[MemoryItem]:
+        """Fetch memory item by ID."""
+        with self.db.session() as conn:
+            row = conn.execute("SELECT * FROM memories WHERE id = ?;", (memory_id,)).fetchone()
+            if row:
+                return self._row_to_memory(row)
+        return None
+
+    def list_by_profile(
+        self,
+        profile_id: str,
+        category: Optional[MemoryCategory] = None,
+        project_id: Optional[str] = None,
+        active_only: bool = True,
+    ) -> List[MemoryItem]:
+        """List memory items for a profile with optional category and project filtering."""
+        with self.db.session() as conn:
+            query = "SELECT * FROM memories WHERE profile_id = ?"
+            params: List[Any] = [profile_id]
+            if category:
+                query += " AND category = ?"
+                params.append(category.value)
+            if project_id:
+                query += " AND (project_id IS NULL OR project_id = ? OR scope != 'project')"
+                params.append(project_id)
+            if active_only:
+                query += " AND is_active = 1"
+            query += " ORDER BY updated_at DESC;"
+
+            rows = conn.execute(query, params).fetchall()
+            return [self._row_to_memory(r) for r in rows]
+
+    def search(
+        self,
+        profile_id: str,
+        query: str,
+        category: Optional[MemoryCategory] = None,
+        scope: Optional[KnowledgeScope] = None,
+        project_id: Optional[str] = None,
+    ) -> List[MemoryItem]:
+        """Search memory items matching text query in title or content."""
+        with self.db.session() as conn:
+            sql = "SELECT * FROM memories WHERE profile_id = ? AND is_active = 1"
+            params: List[Any] = [profile_id]
+            if category:
+                sql += " AND category = ?"
+                params.append(category.value)
+            if scope:
+                sql += " AND scope = ?"
+                params.append(scope.value)
+            if project_id:
+                sql += " AND (project_id IS NULL OR project_id = ? OR scope != 'project')"
+                params.append(project_id)
+
+            terms = query.lower().split()
+            rows = conn.execute(sql, params).fetchall()
+            results = []
+            for r in rows:
+                mem = self._row_to_memory(r)
+                text = f"{mem.title} {json.dumps(mem.content)}".lower()
+                if not terms or any(t in text for t in terms):
+                    results.append(mem)
+            return results
+
+    def delete(self, memory_id: str) -> bool:
+        """Delete memory item."""
+        with self.db.session() as conn:
+            cursor = conn.execute("DELETE FROM memories WHERE id = ?;", (memory_id,))
+            return cursor.rowcount > 0
+
+    def count_by_profile(self, profile_id: str) -> int:
+        """Count active memories for a profile."""
+        with self.db.session() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM memories WHERE profile_id = ? AND is_active = 1;",
+                (profile_id,),
+            ).fetchone()
+            return row[0] if row else 0
+
+    def _row_to_memory(self, row: sqlite3.Row) -> MemoryItem:
+        return MemoryItem(
+            id=row["id"],
+            profile_id=row["profile_id"],
+            category=MemoryCategory(row["category"]),
+            title=row["title"],
+            content=json.loads(row["content_json"]),
+            scope=KnowledgeScope(row["scope"]),
+            project_id=row["project_id"],
+            confidence=row["confidence"],
+            epistemic_type=EpistemicType(row["epistemic_type"]),
+            provenance=Provenance.model_validate_json(row["provenance_json"]),
+            evidence=[VerificationEvidence.model_validate(e) for e in json.loads(row["evidence_json"])],
+            is_active=bool(row["is_active"]),
+            created_at=datetime.fromisoformat(row["created_at"]),
+            updated_at=datetime.fromisoformat(row["updated_at"]),
+        )
+
+
+class SkillRepository:
+    """Persistence operations for self-improving skills, versions, and evaluations."""
+
+    def __init__(self, db: DatabaseManager):
+        self.db = db
+
+    def save_skill(self, skill: Skill) -> Skill:
+        """Create or update a skill record."""
+        with self.db.session() as conn:
+            conn.execute(
+                """
+                INSERT INTO skills (
+                    id, profile_id, name, description, category, current_version,
+                    status, scope, metadata_json, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    description = excluded.description,
+                    category = excluded.category,
+                    current_version = excluded.current_version,
+                    status = excluded.status,
+                    scope = excluded.scope,
+                    metadata_json = excluded.metadata_json,
+                    updated_at = excluded.updated_at;
+                """,
+                (
+                    skill.id,
+                    skill.profile_id,
+                    skill.name,
+                    skill.description,
+                    skill.category,
+                    skill.current_version,
+                    skill.status.value,
+                    skill.scope.value,
+                    json.dumps(skill.metadata),
+                    skill.created_at.isoformat(),
+                    skill.updated_at.isoformat(),
+                ),
+            )
+            # Save any attached versions
+            for ver in skill.versions:
+                self._save_version_conn(conn, ver)
+        return skill
+
+    def get_skill_by_id(self, skill_id: str) -> Optional[Skill]:
+        """Fetch skill by ID with all versions attached."""
+        with self.db.session() as conn:
+            row = conn.execute("SELECT * FROM skills WHERE id = ?;", (skill_id,)).fetchone()
+            if row:
+                skill = self._row_to_skill(row)
+                skill.versions = self._list_versions_conn(conn, skill_id)
+                return skill
+        return None
+
+    def get_skill_by_name(self, profile_id: str, name: str) -> Optional[Skill]:
+        """Fetch skill by unique profile and name."""
+        with self.db.session() as conn:
+            row = conn.execute(
+                "SELECT * FROM skills WHERE profile_id = ? AND name = ?;",
+                (profile_id, name),
+            ).fetchone()
+            if row:
+                skill = self._row_to_skill(row)
+                skill.versions = self._list_versions_conn(conn, skill.id)
+                return skill
+        return None
+
+    def list_skills(self, profile_id: str, status: Optional[SkillStatus] = None) -> List[Skill]:
+        """List all skills in profile."""
+        with self.db.session() as conn:
+            query = "SELECT * FROM skills WHERE profile_id = ?"
+            params: List[Any] = [profile_id]
+            if status:
+                query += " AND status = ?"
+                params.append(status.value)
+            query += " ORDER BY updated_at DESC;"
+
+            rows = conn.execute(query, params).fetchall()
+            skills = []
+            for r in rows:
+                s = self._row_to_skill(r)
+                s.versions = self._list_versions_conn(conn, s.id)
+                skills.append(s)
+            return skills
+
+    def save_version(self, version: SkillVersion) -> SkillVersion:
+        """Save a new version of a skill."""
+        with self.db.session() as conn:
+            self._save_version_conn(conn, version)
+        return version
+
+    def get_version(self, skill_id: str, version_tag: str) -> Optional[SkillVersion]:
+        """Fetch a specific version of a skill."""
+        with self.db.session() as conn:
+            row = conn.execute(
+                "SELECT * FROM skill_versions WHERE skill_id = ? AND version = ?;",
+                (skill_id, version_tag),
+            ).fetchone()
+            if row:
+                return self._row_to_version(row)
+        return None
+
+    def list_versions(self, skill_id: str) -> List[SkillVersion]:
+        """List all versions of a skill."""
+        with self.db.session() as conn:
+            return self._list_versions_conn(conn, skill_id)
+
+    def save_evaluation(self, eval_record: SkillEvaluation) -> SkillEvaluation:
+        """Store a benchmark evaluation trial for a skill version."""
+        with self.db.session() as conn:
+            conn.execute(
+                """
+                INSERT INTO skill_evaluations (id, skill_version_id, task_id, benchmark_id, passed, evidence_json, evaluated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    eval_record.id,
+                    eval_record.skill_version_id,
+                    eval_record.task_id,
+                    eval_record.benchmark_id,
+                    1 if eval_record.passed else 0,
+                    json.dumps(eval_record.evidence),
+                    eval_record.evaluated_at.isoformat(),
+                ),
+            )
+        return eval_record
+
+    def list_evaluations(self, skill_version_id: str) -> List[SkillEvaluation]:
+        """Retrieve evaluation history for a skill version."""
+        with self.db.session() as conn:
+            rows = conn.execute(
+                "SELECT * FROM skill_evaluations WHERE skill_version_id = ? ORDER BY evaluated_at DESC;",
+                (skill_version_id,),
+            ).fetchall()
+            return [
+                SkillEvaluation(
+                    id=r["id"],
+                    skill_version_id=r["skill_version_id"],
+                    task_id=r["task_id"],
+                    benchmark_id=r["benchmark_id"],
+                    passed=bool(r["passed"]),
+                    evidence=json.loads(r["evidence_json"]),
+                    evaluated_at=datetime.fromisoformat(r["evaluated_at"]),
+                )
+                for r in rows
+            ]
+
+    def delete_skill(self, skill_id: str) -> bool:
+        """Delete a skill and all associated versions/evaluations."""
+        with self.db.session() as conn:
+            cursor = conn.execute("DELETE FROM skills WHERE id = ?;", (skill_id,))
+            return cursor.rowcount > 0
+
+    get_by_id = get_skill_by_id
+    list_by_profile = list_skills
+    save = save_skill
+    delete = delete_skill
+
+    def _save_version_conn(self, conn: sqlite3.Connection, version: SkillVersion) -> None:
+        conn.execute(
+            """
+            INSERT INTO skill_versions (
+                id, skill_id, version, instructions, prerequisites_json,
+                procedures_json, validation_steps_json, expected_outcomes_json,
+                evaluation_summary_json, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(skill_id, version) DO UPDATE SET
+                instructions = excluded.instructions,
+                prerequisites_json = excluded.prerequisites_json,
+                procedures_json = excluded.procedures_json,
+                validation_steps_json = excluded.validation_steps_json,
+                expected_outcomes_json = excluded.expected_outcomes_json,
+                evaluation_summary_json = excluded.evaluation_summary_json;
+            """,
+            (
+                version.id,
+                version.skill_id,
+                version.version,
+                version.instructions,
+                json.dumps([p.model_dump(mode="json") for p in version.prerequisites]),
+                json.dumps([p.model_dump(mode="json") for p in version.procedures]),
+                json.dumps(version.validation_steps),
+                json.dumps(version.expected_outcomes),
+                json.dumps(version.evaluation_summary),
+                version.created_at.isoformat(),
+            ),
+        )
+
+    def _list_versions_conn(self, conn: sqlite3.Connection, skill_id: str) -> List[SkillVersion]:
+        rows = conn.execute(
+            "SELECT * FROM skill_versions WHERE skill_id = ? ORDER BY created_at DESC;",
+            (skill_id,),
+        ).fetchall()
+        return [self._row_to_version(r) for r in rows]
+
+    def _row_to_skill(self, row: sqlite3.Row) -> Skill:
+        return Skill(
+            id=row["id"],
+            profile_id=row["profile_id"],
+            name=row["name"],
+            description=row["description"],
+            category=row["category"],
+            current_version=row["current_version"],
+            status=SkillStatus(row["status"]),
+            scope=KnowledgeScope(row["scope"]),
+            metadata=json.loads(row["metadata_json"]),
+            created_at=datetime.fromisoformat(row["created_at"]),
+            updated_at=datetime.fromisoformat(row["updated_at"]),
+        )
+
+    def _row_to_version(self, row: sqlite3.Row) -> SkillVersion:
+        return SkillVersion(
+            id=row["id"],
+            skill_id=row["skill_id"],
+            version=row["version"],
+            instructions=row["instructions"],
+            prerequisites=[SkillPrerequisite.model_validate(p) for p in json.loads(row["prerequisites_json"])],
+            procedures=[ProcedureStep.model_validate(p) for p in json.loads(row["procedures_json"])],
+            validation_steps=json.loads(row["validation_steps_json"]),
+            expected_outcomes=json.loads(row["expected_outcomes_json"]),
+            evaluation_summary=json.loads(row["evaluation_summary_json"]),
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
+
+
+class CheckpointRepository:
+    """Persistence operations for Git, DB, and Profile checkpoints."""
+
+    def __init__(self, db: DatabaseManager):
+        self.db = db
+
+    def create(self, checkpoint: CheckpointRecord) -> CheckpointRecord:
+        """Store a new checkpoint audit entry."""
+        with self.db.session() as conn:
+            conn.execute(
+                """
+                INSERT INTO checkpoints (id, checkpoint_type, reference, summary, details_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    checkpoint.id,
+                    checkpoint.checkpoint_type.value,
+                    checkpoint.reference,
+                    checkpoint.summary,
+                    json.dumps(checkpoint.details),
+                    checkpoint.created_at.isoformat(),
+                ),
+            )
+        return checkpoint
+
+    def get_by_id(self, checkpoint_id: str) -> Optional[CheckpointRecord]:
+        """Fetch checkpoint by ID."""
+        with self.db.session() as conn:
+            row = conn.execute("SELECT * FROM checkpoints WHERE id = ?;", (checkpoint_id,)).fetchone()
+            if row:
+                return self._row_to_checkpoint(row)
+        return None
+
+    def list_checkpoints(
+        self,
+        checkpoint_type: Optional[CheckpointType] = None,
+        limit: int = 50,
+    ) -> List[CheckpointRecord]:
+        """List checkpoints ordered by creation time descending."""
+        with self.db.session() as conn:
+            query = "SELECT * FROM checkpoints"
+            params: List[Any] = []
+            if checkpoint_type:
+                query += " WHERE checkpoint_type = ?"
+                params.append(checkpoint_type.value)
+            query += " ORDER BY created_at DESC LIMIT ?;"
+            params.append(limit)
+
+            rows = conn.execute(query, params).fetchall()
+            return [self._row_to_checkpoint(r) for r in rows]
+
+    def delete(self, checkpoint_id: str) -> bool:
+        """Remove a checkpoint record."""
+        with self.db.session() as conn:
+            cursor = conn.execute("DELETE FROM checkpoints WHERE id = ?;", (checkpoint_id,))
+            return cursor.rowcount > 0
+
+    def _row_to_checkpoint(self, row: sqlite3.Row) -> CheckpointRecord:
+        return CheckpointRecord(
+            id=row["id"],
+            checkpoint_type=CheckpointType(row["checkpoint_type"]),
+            reference=row["reference"],
+            summary=row["summary"],
+            details=json.loads(row["details_json"]),
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
+
+
+class ScheduleRepository:
+    """Persistence operations for persistent background scheduled jobs."""
+
+    def __init__(self, db: DatabaseManager):
+        self.db = db
+
+    def save(self, job: ScheduledJob) -> ScheduledJob:
+        """Save or update a scheduled job."""
+        with self.db.session() as conn:
+            conn.execute(
+                """
+                INSERT INTO scheduled_jobs (
+                    id, name, job_type, schedule_expr, next_run_at, last_run_at,
+                    last_status, params_json, enabled, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(name) DO UPDATE SET
+                    job_type = excluded.job_type,
+                    schedule_expr = excluded.schedule_expr,
+                    next_run_at = excluded.next_run_at,
+                    last_run_at = excluded.last_run_at,
+                    last_status = excluded.last_status,
+                    params_json = excluded.params_json,
+                    enabled = excluded.enabled;
+                """,
+                (
+                    job.id,
+                    job.name,
+                    job.job_type.value,
+                    job.schedule_expr,
+                    job.next_run_at.isoformat(),
+                    job.last_run_at.isoformat() if job.last_run_at else None,
+                    job.last_status,
+                    json.dumps(job.params),
+                    1 if job.enabled else 0,
+                    job.created_at.isoformat(),
+                ),
+            )
+        return job
+
+    def get_by_id(self, job_id: str) -> Optional[ScheduledJob]:
+        """Fetch scheduled job by ID."""
+        with self.db.session() as conn:
+            row = conn.execute("SELECT * FROM scheduled_jobs WHERE id = ?;", (job_id,)).fetchone()
+            if row:
+                return self._row_to_job(row)
+        return None
+
+    def get_by_name(self, name: str) -> Optional[ScheduledJob]:
+        """Fetch scheduled job by name."""
+        with self.db.session() as conn:
+            row = conn.execute("SELECT * FROM scheduled_jobs WHERE name = ?;", (name,)).fetchone()
+            if row:
+                return self._row_to_job(row)
+        return None
+
+    def list_jobs(self, enabled_only: bool = False) -> List[ScheduledJob]:
+        """List all scheduled jobs."""
+        with self.db.session() as conn:
+            query = "SELECT * FROM scheduled_jobs"
+            params: List[Any] = []
+            if enabled_only:
+                query += " WHERE enabled = 1"
+            query += " ORDER BY next_run_at ASC;"
+            rows = conn.execute(query, params).fetchall()
+            return [self._row_to_job(r) for r in rows]
+
+    def list_due_jobs(self, as_of: datetime) -> List[ScheduledJob]:
+        """List enabled jobs whose next_run_at is earlier than or equal to as_of."""
+        with self.db.session() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM scheduled_jobs
+                WHERE enabled = 1 AND next_run_at <= ?
+                ORDER BY next_run_at ASC;
+                """,
+                (as_of.isoformat(),),
+            ).fetchall()
+            return [self._row_to_job(r) for r in rows]
+
+    def delete(self, job_id: str) -> bool:
+        """Delete a scheduled job."""
+        with self.db.session() as conn:
+            cursor = conn.execute("DELETE FROM scheduled_jobs WHERE id = ?;", (job_id,))
+            return cursor.rowcount > 0
+
+    def _row_to_job(self, row: sqlite3.Row) -> ScheduledJob:
+        return ScheduledJob(
+            id=row["id"],
+            name=row["name"],
+            job_type=JobType(row["job_type"]),
+            schedule_expr=row["schedule_expr"],
+            next_run_at=datetime.fromisoformat(row["next_run_at"]),
+            last_run_at=datetime.fromisoformat(row["last_run_at"]) if row["last_run_at"] else None,
+            last_status=row["last_status"],
+            params=json.loads(row["params_json"]),
+            enabled=bool(row["enabled"]),
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
+

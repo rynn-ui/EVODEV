@@ -1,19 +1,25 @@
 """Database and storage abstractions for EvoDev."""
 
-from evodev.storage.db import DatabaseManager, get_db
+from evodev.storage.db import DatabaseManager, close_db, get_db, set_db
 from evodev.storage.migrations import MigrationManager
 from evodev.storage.repositories import (
-    ProfileRepository,
+    BenchmarkRepository,
+    CheckpointRepository,
+    EventRepository,
     ExperienceRepository,
     LessonRepository,
+    MemoryRepository,
+    ProfileRepository,
+    ScheduleRepository,
+    SkillRepository,
     StrategyRepository,
-    EventRepository,
-    BenchmarkRepository,
 )
 
 __all__ = [
     "DatabaseManager",
     "get_db",
+    "set_db",
+    "close_db",
     "MigrationManager",
     "ProfileRepository",
     "ExperienceRepository",
@@ -21,4 +27,8 @@ __all__ = [
     "StrategyRepository",
     "EventRepository",
     "BenchmarkRepository",
+    "MemoryRepository",
+    "SkillRepository",
+    "CheckpointRepository",
+    "ScheduleRepository",
 ]

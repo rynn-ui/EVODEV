@@ -5,6 +5,8 @@ import sys
 from typing import Any, Dict, Optional
 
 from evodev.config import load_config
+from evodev.connectors.contract import ContextRequest, OutcomeReport
+from evodev.connectors.opencode import OpenCodeConnector
 from evodev.models.experience import StrategyOutcome
 from evodev.retrieval.context_assembler import ContextAssembler
 from evodev.retrieval.engine import RetrievalEngine
@@ -42,6 +44,11 @@ class OpenCodeMCPServer:
 
         self.engine = RetrievalEngine(self.l_repo, self.p_repo)
         self.assembler = ContextAssembler()
+        self.connector = OpenCodeConnector(
+            lesson_repo=self.l_repo,
+            profile_repo=self.p_repo,
+            strategy_repo=self.s_repo,
+        )
 
     def handle_request(self, request: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Process incoming JSON-RPC request."""
@@ -56,7 +63,7 @@ class OpenCodeMCPServer:
                 "result": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "evodev", "version": "1.0.0"},
+                    "serverInfo": {"name": "evodev", "version": "2.0.0"},
                 },
             }
 
@@ -148,16 +155,16 @@ class OpenCodeMCPServer:
                 active_profile = self.p_repo.get_active()
                 profile_name = active_profile.name if active_profile else "Default"
 
-                scored = self.engine.retrieve_relevant_lessons(
+                ctx_req = ContextRequest(
                     task_description=task_desc,
                     project_id=proj_id,
                     domain=domain,
                     technologies=techs,
                 )
+                ctx_resp = self.connector.get_context(ctx_req)
 
-                if scored:
-                    text = self.assembler.assemble(scored, profile_name=profile_name)
-                else:
+                text = ctx_resp.advisory_markdown
+                if not text:
                     text = f"No prior verified lessons found for '{task_desc[:60]}' in profile '{profile_name}'."
 
                 return {
@@ -171,22 +178,12 @@ class OpenCodeMCPServer:
                 outcome_str = arguments.get("outcome", "success")
                 domain = arguments.get("domain", "general")
 
-                outcome_map = {
-                    "success": StrategyOutcome.SUCCESS,
-                    "failure": StrategyOutcome.FAILURE,
-                    "regression": StrategyOutcome.REGRESSION,
-                }
-                outcome = outcome_map.get(outcome_str, StrategyOutcome.SUCCESS)
-
-                active = self.p_repo.get_active()
-                profile_id = active.profile_id if active else "default"
-
-                record = self.s_repo.record_outcome(
-                    profile_id=profile_id,
-                    name=strat_name,
-                    category=domain,
-                    outcome=outcome,
+                report = OutcomeReport(
+                    strategy_name=strat_name,
+                    outcome=outcome_str,
+                    domain=domain,
                 )
+                resp = self.connector.report_outcome(report)
 
                 return {
                     "jsonrpc": "2.0",
@@ -195,7 +192,7 @@ class OpenCodeMCPServer:
                         "content": [
                             {
                                 "type": "text",
-                                "text": f"Recorded strategy outcome for '{strat_name}'. New Bayesian score: {record.bayesian_score:.2f} (Attempts: {record.attempts_count}, Successes: {record.success_count}).",
+                                "text": f"Recorded strategy outcome for '{strat_name}'. New Bayesian score: {resp.bayesian_score:.2f} (Attempts: {resp.attempts_count}, Successes: {resp.success_count}).",
                             }
                         ]
                     },
@@ -248,6 +245,10 @@ class OpenCodeMCPServer:
                 sys.stdout.flush()
 
 
-if __name__ == "__main__":
+def main():
     server = OpenCodeMCPServer()
     server.run_stdio()
+
+
+if __name__ == "__main__":
+    main()

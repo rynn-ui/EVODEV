@@ -125,3 +125,57 @@ def test_api_daemon_endpoints(cli_env):
     event_res = client.post("/api/events", json=event_payload)
     assert event_res.status_code == 200
     assert event_res.json()["status"] == "ingested"
+
+
+def test_cli_extended_subcommands(cli_env):
+    """Test memory, skills, checkpoints, schedule, and hermes CLI subcommands."""
+    # 1. Memory CLI
+    res_mem_add = runner.invoke(app, ["memory", "add", "CLI Test Memory", "--category", "architecture", "--content", '{"arch": "hexagonal"}'])
+    assert res_mem_add.exit_code == 0
+    assert "Saved memory item" in res_mem_add.stdout
+
+    res_mem_list = runner.invoke(app, ["memory", "list"])
+    assert res_mem_list.exit_code == 0
+    assert "CLI Test Memory" in res_mem_list.stdout
+
+    res_mem_search = runner.invoke(app, ["memory", "search", "hexagonal"])
+    assert res_mem_search.exit_code == 0
+    assert "CLI Test Memory" in res_mem_search.stdout
+
+    # 2. Skills CLI
+    res_skill_create = runner.invoke(app, ["skills", "create", "CLI TDD Workflow", "--description", "Write tests before code", "--instructions", "Red, Green, Refactor"])
+    assert res_skill_create.exit_code == 0
+    assert "Created new skill" in res_skill_create.stdout
+
+    res_skill_list = runner.invoke(app, ["skills", "list"])
+    assert res_skill_list.exit_code == 0
+    assert "CLI TDD Workflow" in res_skill_list.stdout
+
+    # 3. Checkpoints CLI
+    res_cp_create = runner.invoke(app, ["checkpoints", "create", "CLI test db checkpoint", "--type", "database"])
+    assert res_cp_create.exit_code == 0
+    assert "Created DATABASE checkpoint" in res_cp_create.stdout
+
+    res_cp_list = runner.invoke(app, ["checkpoints", "list"])
+    assert res_cp_list.exit_code == 0
+    assert "CLI test db checkpoint" in res_cp_list.stdout
+
+    # 4. Schedule CLI
+    res_sched_add = runner.invoke(app, ["schedule", "add", "CLI Daily Audit", "--job-type", "health_check", "--schedule", "daily"])
+    assert res_sched_add.exit_code == 0
+    assert "Registered scheduled task" in res_sched_add.stdout
+
+    res_sched_list = runner.invoke(app, ["schedule", "list"])
+    assert res_sched_list.exit_code == 0
+    assert "CLI Daily Audit" in res_sched_list.stdout
+
+    res_sched_run = runner.invoke(app, ["schedule", "run-pending"])
+    assert res_sched_run.exit_code == 0
+
+    # 5. Hermes Connector CLI
+    with tempfile.TemporaryDirectory() as td:
+        res_hermes = runner.invoke(app, ["connectors", "install-hermes", "--project-dir", td])
+        assert res_hermes.exit_code == 0
+        assert "Configured Hermes Agent tools" in res_hermes.stdout
+        assert Path(td, "hermes_config.json").is_file()
+
