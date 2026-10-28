@@ -289,14 +289,14 @@ class OpenCodeConnector(BaseAgentConnector):
         )
 
     def generate_config(self, python_executable: str = "python") -> Dict[str, Any]:
-        """Generate MCP configuration structure for OpenCode."""
+        """Generate MCP configuration structure for OpenCode compliant with opencode.ai/config.json."""
         return {
             "$schema": "https://opencode.ai/config.json",
             "mcp": {
                 "evodev": {
-                    "type": "stdio",
-                    "command": python_executable,
-                    "args": ["-m", "evodev.connectors.opencode_mcp"],
+                    "type": "local",
+                    "command": [python_executable, "-m", "evodev.connectors.opencode_mcp"],
+                    "enabled": True,
                 }
             },
         }
@@ -318,9 +318,13 @@ class OpenCodeConnector(BaseAgentConnector):
             try:
                 with open(config_path, "r", encoding="utf-8") as f:
                     existing = json.load(f)
-                if "mcp" not in existing:
+                if not isinstance(existing, dict):
+                    existing = {}
+                if "mcp" not in existing or not isinstance(existing["mcp"], dict):
                     existing["mcp"] = {}
                 existing["mcp"]["evodev"] = cfg["mcp"]["evodev"]
+                if "$schema" not in existing:
+                    existing["$schema"] = "https://opencode.ai/config.json"
                 cfg = existing
             except Exception:
                 pass
@@ -329,6 +333,44 @@ class OpenCodeConnector(BaseAgentConnector):
             json.dump(cfg, f, indent=2)
 
         return config_path
+
+    def validate_project_config(self, project_dir: Path) -> Dict[str, Any]:
+        """Validate opencode.json in project_dir."""
+        config_path = Path(project_dir) / "opencode.json"
+        if not config_path.is_file():
+            return {"valid": False, "exists": False, "message": "opencode.json not found in project directory"}
+
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            return {"valid": False, "exists": True, "message": f"Invalid JSON syntax in opencode.json: {e}"}
+
+        mcp = data.get("mcp", {})
+        if not isinstance(mcp, dict) or "evodev" not in mcp:
+            return {"valid": False, "exists": True, "message": "evodev MCP entry not registered in opencode.json"}
+
+        evodev_entry = mcp["evodev"]
+        if not isinstance(evodev_entry, dict):
+            return {"valid": False, "exists": True, "message": "evodev MCP entry is not an object"}
+
+        entry_type = evodev_entry.get("type")
+        command = evodev_entry.get("command")
+        enabled = evodev_entry.get("enabled")
+
+        if entry_type != "local" or not isinstance(command, list) or enabled is not True:
+            return {
+                "valid": False,
+                "exists": True,
+                "needs_repair": True,
+                "message": f"Legacy or invalid schema (type={entry_type}, command={type(command).__name__}, enabled={enabled}). Repair required.",
+            }
+
+        return {"valid": True, "exists": True, "message": "OpenCode MCP configuration is valid and ready"}
+
+    def repair_project_config(self, project_dir: Path, python_executable: str = "python") -> Path:
+        """Repair or recreate opencode.json to ensure valid OpenCode schema."""
+        return self.apply_to_project(project_dir, python_executable=python_executable)
 
     def harvest_exported_session(
         self,

@@ -211,6 +211,51 @@ def apply_theme(root: tk.Tk) -> ttk.Style:
         foreground=[("active", "#ffffff")],
     )
 
+    # Success / Connect Button
+    style.configure(
+        "Success.TButton",
+        background=Colors.STATUS_GREEN,
+        foreground="#ffffff",
+        font=Fonts.BODY_BOLD,
+        padding=(12, 6),
+        borderwidth=0,
+    )
+    style.map(
+        "Success.TButton",
+        background=[("active", "#059669"), ("pressed", "#047857")],
+        foreground=[("active", "#ffffff")],
+    )
+
+    # Launch Button
+    style.configure(
+        "Launch.TButton",
+        background=Colors.ACCENT_CYAN,
+        foreground="#0b1120",
+        font=Fonts.BODY_BOLD,
+        padding=(12, 6),
+        borderwidth=0,
+    )
+    style.map(
+        "Launch.TButton",
+        background=[("active", "#22d3ee"), ("pressed", "#0891b2")],
+        foreground=[("active", "#0b1120")],
+    )
+
+    # Outline Button
+    style.configure(
+        "Outline.TButton",
+        background=Colors.SURFACE,
+        foreground=Colors.TEXT_MAIN,
+        font=Fonts.BODY,
+        padding=(10, 5),
+        borderwidth=1,
+    )
+    style.map(
+        "Outline.TButton",
+        background=[("active", Colors.SURFACE_HOVER)],
+        foreground=[("active", Colors.ACCENT_CYAN)],
+    )
+
     # Small Sub-tab buttons
     style.configure(
         "SubTab.TButton",

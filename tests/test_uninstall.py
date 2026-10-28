@@ -76,9 +76,9 @@ def uninstaller_env():
                     "args": ["--read-only"],
                 },
                 "evodev": {
-                    "type": "stdio",
-                    "command": "python",
-                    "args": ["-m", "evodev.connectors.opencode_mcp"],
+                    "type": "local",
+                    "command": ["python", "-m", "evodev.connectors.opencode_mcp"],
+                    "enabled": True,
                 },
             },
             "custom_setting": "keep_this_intact",

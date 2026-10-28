@@ -210,11 +210,73 @@ class EvoDevApp:
         self.profile_switch_cb.pack(fill="x")
         self.profile_switch_cb.bind("<<ComboboxSelected>>", self._on_switch_profile)
 
-        # Navigation Menu
-        nav_f = tk.Frame(self.sidebar, bg=Colors.SIDEBAR)
-        nav_f.pack(fill="x", padx=8)
+        # Navigation Container with Simple / Pro mode support
+        self.is_pro_mode = False
+        self.simple_keys = ["overview", "connectors", "lessons", "checkpoints"]
+        self.header_widgets = []
+        self.btn_expand_hint = None
 
-        nav_items = [
+        self.nav_container = tk.Frame(self.sidebar, bg=Colors.SIDEBAR)
+        self.nav_container.pack(fill="both", expand=True, padx=8)
+
+        # Mode Indicator / Toggle bar
+        mode_bar = tk.Frame(self.nav_container, bg=Colors.SIDEBAR)
+        mode_bar.pack(fill="x", pady=(0, 6))
+
+        self.lbl_nav_mode = tk.Label(
+            mode_bar,
+            text="ESSENTIALS",
+            font=Fonts.SMALL_BOLD,
+            bg=Colors.SIDEBAR,
+            fg=Colors.TEXT_MUTED,
+        )
+        self.lbl_nav_mode.pack(side="left", padx=4)
+
+        self.btn_nav_toggle = ttk.Button(
+            mode_bar,
+            text="Pro Mode ⚙️",
+            style="SubTab.TButton",
+            command=self._toggle_nav_mode,
+        )
+        self.btn_nav_toggle.pack(side="right")
+
+        self.nav_f = tk.Frame(self.nav_container, bg=Colors.SIDEBAR)
+        self.nav_f.pack(fill="both", expand=True)
+
+        self.pro_categories = [
+            ("CORE", [
+                ("overview", "📊  Overview & Telemetry"),
+                ("connectors", "🔌  Agent Connectors"),
+            ]),
+            ("KNOWLEDGE", [
+                ("lessons", "💡  Verified Lessons"),
+                ("memory", "🧠  Categorized Memory"),
+                ("strategies", "🎯  Strategy Statistics"),
+                ("experiences", "📝  Experience Log"),
+                ("inspector", "🔍  Experience Inspector"),
+            ]),
+            ("AUTOMATION", [
+                ("skills", "⚡  Self-Improving Skills"),
+                ("orchestration", "🤖  Specialist Delegation"),
+                ("scheduler", "⏱️  Automation Scheduler"),
+                ("benchmarks", "📈  Empirical Benchmarks"),
+            ]),
+            ("SYSTEM", [
+                ("checkpoints", "🛡️  Safe Checkpoints"),
+                ("doctor", "🩺  Diagnostics & Doctor"),
+                ("uninstall", "🗑️  Uninstall EvoDev"),
+            ]),
+        ]
+
+        self.simple_items = [
+            ("overview", "📊  Overview & Telemetry"),
+            ("connectors", "🔌  Agent Connectors"),
+            ("lessons", "💡  Verified Lessons"),
+            ("checkpoints", "🛡️  Safe Checkpoints"),
+        ]
+
+        # Pre-create all 14 nav buttons
+        all_items = [
             ("overview", "📊  Overview & Telemetry"),
             ("inspector", "🔍  Experience Inspector"),
             ("memory", "🧠  Categorized Memory"),
@@ -231,15 +293,16 @@ class EvoDevApp:
             ("uninstall", "🗑️  Uninstall EvoDev"),
         ]
 
-        for key, label in nav_items:
+        for key, label in all_items:
             btn = ttk.Button(
-                nav_f,
+                self.nav_f,
                 text=label,
                 style="Nav.TButton",
                 command=lambda k=key: self.switch_view(k),
             )
-            btn.pack(fill="x", pady=2)
             self.nav_buttons[key] = btn
+
+        self._render_nav()
 
         # Sidebar Footer
         footer = tk.Frame(self.sidebar, bg=Colors.SIDEBAR, padx=14, pady=12)
@@ -300,12 +363,78 @@ class EvoDevApp:
         self.views["doctor"] = DoctorView(self.views_container, self)
         self.views["uninstall"] = UninstallView(self.views_container, self)
 
+    def _toggle_nav_mode(self) -> None:
+        """Toggle between Simple (4 essentials) and Pro (all 14 modules) navigation."""
+        self.is_pro_mode = not self.is_pro_mode
+        self._render_nav()
+
+    def _render_nav(self) -> None:
+        """Render sidebar navigation based on active mode."""
+        for w in self.header_widgets:
+            try:
+                w.destroy()
+            except Exception:
+                pass
+        self.header_widgets.clear()
+
+        for btn in self.nav_buttons.values():
+            btn.pack_forget()
+
+        if hasattr(self, "btn_expand_hint") and self.btn_expand_hint:
+            try:
+                self.btn_expand_hint.destroy()
+            except Exception:
+                pass
+            self.btn_expand_hint = None
+
+        if not self.is_pro_mode:
+            self.btn_nav_toggle.configure(text="Pro Mode ⚙️")
+            self.lbl_nav_mode.configure(text="ESSENTIALS")
+
+            for key, label in self.simple_items:
+                btn = self.nav_buttons[key]
+                btn.configure(text=label)
+                btn.pack(fill="x", pady=2)
+
+            self.btn_expand_hint = ttk.Button(
+                self.nav_f,
+                text="➕ View All 14 Tools...",
+                style="SubTab.TButton",
+                command=self._toggle_nav_mode,
+            )
+            self.btn_expand_hint.pack(fill="x", pady=(12, 2))
+        else:
+            self.btn_nav_toggle.configure(text="Simple ✨")
+            self.lbl_nav_mode.configure(text="ALL MODULES")
+
+            for cat_name, items in self.pro_categories:
+                lbl = tk.Label(
+                    self.nav_f,
+                    text=f"── {cat_name} ──",
+                    font=Fonts.SMALL_BOLD,
+                    bg=Colors.SIDEBAR,
+                    fg=Colors.TEXT_DIM,
+                    pady=2,
+                )
+                lbl.pack(fill="x", pady=(6, 2))
+                self.header_widgets.append(lbl)
+
+                for key, label in items:
+                    btn = self.nav_buttons[key]
+                    btn.configure(text=label)
+                    btn.pack(fill="x", pady=1)
+
     def switch_view(self, view_key: str) -> None:
         """Switch current content view with active tab highlighting."""
         if view_key not in self.views:
             return
 
         self.current_view_key = view_key
+
+        # If switching to an advanced view while in simple mode, auto-expand pro mode
+        if view_key not in self.simple_keys and not self.is_pro_mode:
+            self.is_pro_mode = True
+            self._render_nav()
 
         # Update sidebar button styles
         for k, btn in self.nav_buttons.items():

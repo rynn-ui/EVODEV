@@ -383,3 +383,92 @@ def test_opencode_mcp_protocol_roundtrip(unified_env):
     }
     call_resp = server.handle_request(call_req)
     assert "Recorded strategy outcome" in call_resp["result"]["content"][0]["text"]
+
+
+def test_opencode_schema_validation_and_repair(unified_env):
+    """Verify OpenCodeConnector detects legacy or broken opencode.json and auto-repairs it."""
+    import tempfile
+    import json
+    from pathlib import Path
+    from evodev.connectors.opencode import OpenCodeConnector
+
+    connector: OpenCodeConnector = unified_env["adapters"]["opencode"]
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        p_dir = Path(tmp_dir)
+
+        # 1. Non-existent file
+        val1 = connector.validate_project_config(p_dir)
+        assert val1["valid"] is False
+        assert val1["exists"] is False
+
+        # 2. Broken legacy schema (the exact error from user screenshot with type: stdio)
+        broken_json = p_dir / "opencode.json"
+        with open(broken_json, "w", encoding="utf-8") as f:
+            json.dump({
+                "$schema": "https://opencode.ai/config.json",
+                "mcp": {
+                    "evodev": {
+                        "type": "stdio",
+                        "command": "python",
+                        "args": ["-m", "evodev.connectors.opencode_mcp"],
+                    }
+                }
+            }, f, indent=2)
+
+        val2 = connector.validate_project_config(p_dir)
+        assert val2["valid"] is False
+        assert val2["needs_repair"] is True
+
+        # 3. Auto-repair
+        repaired = connector.repair_project_config(p_dir)
+        assert repaired.is_file()
+
+        val3 = connector.validate_project_config(p_dir)
+        assert val3["valid"] is True
+
+        with open(broken_json, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        assert data["mcp"]["evodev"]["type"] == "local"
+        assert data["mcp"]["evodev"]["command"] == ["python", "-m", "evodev.connectors.opencode_mcp"]
+        assert data["mcp"]["evodev"]["enabled"] is True
+
+
+def test_connector_manager_setup_and_launch(unified_env):
+    """Verify ConnectorManager can provision agent configs and validate launch targets."""
+    import tempfile
+    from pathlib import Path
+    mgr = unified_env["manager"]
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        p_dir = Path(tmp_dir)
+
+        # Provision OpenCode
+        res_open = mgr.setup_connector_for_project("opencode", p_dir)
+        assert res_open["success"] is True
+        assert (p_dir / "opencode.json").is_file()
+
+        # Provision Gemini
+        res_gem = mgr.setup_connector_for_project("gemini", p_dir)
+        assert res_gem["success"] is True
+        assert (p_dir / ".agents" / "hooks.json").is_file()
+
+        # Provision Kilo Code
+        res_kilo = mgr.setup_connector_for_project("kilocode", p_dir)
+        assert res_kilo["success"] is True
+        assert (p_dir / ".kilo" / "mcp.json").is_file()
+
+        # Register Hermes
+        from evodev.connectors.hermes import HermesConnector
+        hermes = HermesConnector(unified_env["engine"], unified_env["ev_repo"], unified_env["s_repo"], unified_env["l_repo"], unified_env["p_repo"])
+        unified_env["registry"].register(hermes)
+
+        # Provision Hermes
+        res_herm = mgr.setup_connector_for_project("hermes", p_dir)
+        assert res_herm["success"] is True
+        assert (p_dir / "hermes_config.json").is_file()
+
+        # Test launch validation for non-existent agent
+        res_launch_unknown = mgr.launch_agent("nonexistent", p_dir)
+        assert res_launch_unknown["success"] is False
+

@@ -390,3 +390,124 @@ class ConnectorManager:
             })
 
         return diagnostics
+
+    def setup_connector_for_project(
+        self,
+        adapter_id: str,
+        project_dir: Any,
+        python_executable: str = "python",
+    ) -> Dict[str, Any]:
+        """Provision and repair connector configuration into the target project."""
+        from pathlib import Path
+        project_path = Path(project_dir).resolve()
+        connector = self.registry.get(adapter_id)
+        if not connector:
+            return {"success": False, "message": f"Connector '{adapter_id}' is not registered."}
+
+        try:
+            if adapter_id == "opencode":
+                from evodev.connectors.opencode import OpenCodeConnector
+                if isinstance(connector, OpenCodeConnector):
+                    cfg_file = connector.apply_to_project(project_path, python_executable=python_executable)
+                    return {
+                        "success": True,
+                        "path": str(cfg_file),
+                        "message": f"Successfully configured and verified OpenCode MCP at:\n{cfg_file}",
+                    }
+            elif adapter_id == "gemini":
+                from evodev.connectors.gemini import GeminiCLIConnector
+                if isinstance(connector, GeminiCLIConnector):
+                    res = connector.apply_to_workspace(project_path, python_executable=python_executable)
+                    return {
+                        "success": True,
+                        "path": str(res["hooks"]),
+                        "message": f"Configured Gemini CLI / Antigravity hooks at:\n{res['hooks']}",
+                    }
+            elif adapter_id == "kilocode":
+                from evodev.connectors.kilocode import KiloCodeConnector
+                if isinstance(connector, KiloCodeConnector):
+                    cfg_file = connector.apply_to_project(project_path, python_executable=python_executable)
+                    return {
+                        "success": True,
+                        "path": str(cfg_file),
+                        "message": f"Configured Kilo Code MCP at:\n{cfg_file}",
+                    }
+            elif adapter_id == "hermes":
+                from evodev.connectors.hermes import HermesConnector
+                if isinstance(connector, HermesConnector):
+                    cfg_file = connector.generate_hermes_config(project_path)
+                    return {
+                        "success": True,
+                        "path": str(cfg_file),
+                        "message": f"Configured Hermes Agent at:\n{cfg_file}",
+                    }
+
+            return {"success": False, "message": f"Automated configuration not supported for adapter '{adapter_id}'."}
+        except Exception as e:
+            return {"success": False, "message": f"Failed to configure {adapter_id}: {e}"}
+
+    def launch_agent(self, adapter_id: str, project_dir: Any) -> Dict[str, Any]:
+        """Launch the specified agent in an interactive terminal within project_dir."""
+        from pathlib import Path
+        import shutil
+        import subprocess
+        import sys
+
+        project_path = Path(project_dir).resolve()
+        if not project_path.is_dir():
+            try:
+                project_path.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                return {"success": False, "message": f"Target project directory could not be created: {e}"}
+
+        binary_map = {
+            "opencode": "opencode",
+            "gemini": "gemini",
+            "kilocode": "kilo",
+            "hermes": "hermes",
+        }
+        bin_name = binary_map.get(adapter_id)
+        if not bin_name:
+            return {"success": False, "message": f"Direct launching not supported for adapter '{adapter_id}'."}
+
+        bin_path = shutil.which(bin_name)
+        if not bin_path and adapter_id == "gemini":
+            bin_path = shutil.which("agy")
+            if bin_path:
+                bin_name = "agy"
+
+        if not bin_path:
+            install_hints = {
+                "opencode": "npm install -g opencode-ai",
+                "gemini": "npm install -g @google/gemini-cli or use Antigravity IDE",
+                "kilocode": "Install Kilo Code from https://kilo.ai and ensure 'kilo' is in PATH",
+                "hermes": "pip install hermes-agent",
+            }
+            hint = install_hints.get(adapter_id, "Please install the agent CLI tool.")
+            return {
+                "success": False,
+                "message": f"'{bin_name}' CLI is not found on your system PATH.\n\nInstall instructions:\n{hint}",
+            }
+
+        # Auto-provision or repair if needed before launching
+        if adapter_id == "opencode":
+            opencode_conn = self.registry.get("opencode")
+            if opencode_conn and hasattr(opencode_conn, "apply_to_project"):
+                try:
+                    opencode_conn.apply_to_project(project_path)
+                except Exception:
+                    pass
+
+        try:
+            if sys.platform == "win32":
+                cmd_line = f'start cmd /k "cd /d "{project_path}" && {bin_name}"'
+                subprocess.Popen(cmd_line, shell=True)
+            else:
+                subprocess.Popen([bin_name], cwd=str(project_path))
+
+            return {
+                "success": True,
+                "message": f"Launched {bin_name} terminal session in:\n{project_path}",
+            }
+        except Exception as e:
+            return {"success": False, "message": f"Failed to launch {bin_name}: {e}"}

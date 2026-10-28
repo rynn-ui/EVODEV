@@ -57,14 +57,17 @@ def test_opencode_connector_real_installation(connector_stack):
     cfg = connector.generate_config(python_executable="python")
     assert "mcp" in cfg
     assert "evodev" in cfg["mcp"]
-    assert cfg["mcp"]["evodev"]["command"] == "python"
+    assert cfg["mcp"]["evodev"]["type"] == "local"
+    assert cfg["mcp"]["evodev"]["command"] == ["python", "-m", "evodev.connectors.opencode_mcp"]
+    assert cfg["mcp"]["evodev"]["enabled"] is True
 
     with tempfile.TemporaryDirectory() as tmp_proj:
         cfg_path = connector.apply_to_project(Path(tmp_proj))
         assert cfg_path.is_file()
         with open(cfg_path, "r", encoding="utf-8") as f:
             written = json.load(f)
-        assert written["mcp"]["evodev"]["type"] == "stdio"
+        assert written["mcp"]["evodev"]["type"] == "local"
+        assert written["mcp"]["evodev"]["enabled"] is True
 
 
 def test_opencode_session_harvester(connector_stack):
